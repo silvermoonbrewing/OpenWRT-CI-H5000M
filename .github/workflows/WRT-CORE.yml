@@ -161,6 +161,8 @@ jobs:
           src-git helloworld https://github.com/fw876/helloworld.git
           src-git openclash https://github.com/vernesong/OpenClash.git
           src-git istore https://github.com/linkease/istore;main
+          src-git qmodem https://github.com/FUjr/QModem.git;main
+          src-git mt5700m https://github.com/FAN789/luci-app-mt5700m.git;main
           EOF
 
           echo "===== feeds.conf.default ====="
