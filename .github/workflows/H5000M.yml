@@ -2,7 +2,7 @@
 # Copyright (C) 2026 VIKINGYFY
 
 #CI项目
-name: MT6000
+name: H5000M
 
 #CI计划
 on:
@@ -28,22 +28,22 @@ permissions: write-all
 #CI任务
 jobs:
   config:
-    name: MT6000
+    name: H5000M
     #调用公用编译核心WRT-CORE.yml
     uses: ./.github/workflows/WRT-CORE.yml
     with:
-      #编译配置（对应 Config/MT6000.txt）
-      WRT_CONFIG: MT6000
+      #编译配置（对应 Config/H5000M.txt）
+      WRT_CONFIG: H5000M
       #默认主题（argon 或 aurora，二选一）
       WRT_THEME: argon
       #默认主机名
-      WRT_NAME: GLMT6000_28
+      WRT_NAME: Hiveton_H5000M
       #默认WIFI名称（实际按频段区分，见 Files/etc/uci-defaults/99-mt6000-custom）
-      WRT_SSID: MT6000
+      WRT_SSID: Hiveton
       #默认WIFI密码
-      WRT_WORD: password
+      WRT_WORD: ljx2026@.
       #默认地址
-      WRT_IP: 192.168.28.1
+      WRT_IP: 192.168.99.1
       #默认密码，仅作提示，修改无用
       WRT_PW: 无
       #源码链接
