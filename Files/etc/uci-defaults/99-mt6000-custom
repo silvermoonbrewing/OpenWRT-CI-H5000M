@@ -1,9 +1,9 @@
 #!/bin/sh
-# GL-MT6000 首次启动个性化设置
+# Hiveton H5000M 首次启动个性化设置
 
 #---------- 系统 ----------
 uci -q batch <<-EOF
-	set system.@system[0].hostname='GLMT6000_28'
+	set system.@system[0].hostname='Hiveton_H5000M'
 	set system.@system[0].timezone='CST-8'
 	set system.@system[0].zonename='Asia/Shanghai'
 	set system.@system[0].ttylogin='0'
@@ -42,10 +42,10 @@ set_iface() {
 
 	band=$(uci -q get wireless.$device.band)
 	case "$band" in
-		2g) ssid='MT6000-2G' ;;
-		5g) ssid='MT6000-5G' ;;
-		6g) ssid='MT6000-6G' ;;
-		*)  ssid='MT6000' ;;
+		2g) ssid='Hiveton-2G' ;;
+		5g) ssid='Hiveton-5G' ;;
+		6g) ssid='Hiveton-6G' ;;
+		*)  ssid='Hiveton' ;;
 	esac
 
 	uci -q set wireless.$iface.ssid="$ssid"
