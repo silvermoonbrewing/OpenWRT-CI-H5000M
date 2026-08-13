@@ -54,6 +54,10 @@ UPDATE_PACKAGE "argon-config" "jerrykuku/luci-app-argon-config" "master"
 UPDATE_PACKAGE "aurora" "eamonxg/luci-theme-aurora" "master"
 UPDATE_PACKAGE "aurora-config" "eamonxg/luci-app-aurora-config" "master"
 
+#H5000M 专属插件（平级结构，只能 clone 到 package/）
+UPDATE_PACKAGE "h5000m-fancontrol" "FAN789/luci-app-h5000m-fancontrol" "main"
+UPDATE_PACKAGE "h5000m-netmode" "FAN789/luci-app-h5000m-netmode" "main"
+
 #引入私有扩展脚本
 if [ -f "$GITHUB_WORKSPACE/Scripts/PRIVATE.sh" ]; then
 	source "$GITHUB_WORKSPACE/Scripts/PRIVATE.sh"
