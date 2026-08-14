@@ -179,6 +179,13 @@ jobs:
           rm -rf ./feeds/packages/net/mosdns
           rm -rf ./feeds/packages/net/v2ray-geodata
 
+          # ImmortalWrt 自带 feed 里这四个包版本偏旧，且排在自定义 feeds 前面会赢
+          # 删掉才能用上 passwall_packages 里的新版
+          rm -rf ./feeds/packages/net/xray-core
+          rm -rf ./feeds/packages/net/sing-box
+          rm -rf ./feeds/packages/net/hysteria
+          rm -rf ./feeds/packages/net/naiveproxy
+
           # 关键：删完必须重建索引，否则被删的包仍在索引里，会留下断链
           ./scripts/feeds update -i
 
@@ -199,8 +206,11 @@ jobs:
           if [ -d "$GITHUB_WORKSPACE/Files" ]; then
             mkdir -p ./wrt/files
             cp -rf $GITHUB_WORKSPACE/Files/. ./wrt/files/
-            find ./wrt/files/ -type f -exec dos2unix {} \; 2>/dev/null || true
+            # 只对 uci-defaults 做换行符转换
+            # files/ 里还有 OpenClash 内核和 Geo 数据等二进制，dos2unix 会损坏它们
+            find ./wrt/files/etc/uci-defaults/ -type f -exec dos2unix {} \; 2>/dev/null || true
             find ./wrt/files/etc/uci-defaults/ -type f -exec chmod +x {} \; 2>/dev/null || true
+            chmod 755 ./wrt/files/etc/openclash/core/clash_meta 2>/dev/null || true
 
             echo "===== files ====="
             find ./wrt/files/ -type f
