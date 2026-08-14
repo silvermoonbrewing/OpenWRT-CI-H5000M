@@ -20,6 +20,11 @@ uci -q batch <<-EOF
 	commit system
 EOF
 
+#---------- root 默认密码 ----------
+# 密码：admin（MD5-crypt 哈希，必须用单引号，双引号会被 shell 展开成空密码）
+# 换密码用：openssl passwd -1 你的新密码
+sed -i 's|^root:[^:]*:|root:$1$Op3nWrtX$l7bDHUU8J8QiMrMHTsaL51:|' /etc/shadow
+
 #---------- 无线 ----------
 # 若无线配置尚未生成，先生成
 [ -f /etc/config/wireless ] || /sbin/wifi config
