@@ -139,15 +139,6 @@ jobs:
             echo "caches missed!"
           fi
 
-          if ${{steps.check-cache.outputs.cache-hit != 'true'}}; then
-            CACHE_LIST=$(gh cache list --key "$WRT_CONFIG-$WRT_INFO" | cut -f 1)
-            for CACHE_KEY in $CACHE_LIST; do
-              gh cache delete $CACHE_KEY
-            done
-
-            echo "caches cleanup done!"
-          fi
-
       - name: Update Feeds
         run: |
           cd ./wrt/
@@ -240,6 +231,16 @@ jobs:
           cd ./wrt/
 
           make -j$(nproc) || make -j$(nproc) V=s || make -j1 V=s
+
+      - name: Cleanup Caches
+        if: success() && env.WRT_TEST != 'true' && steps.check-cache.outputs.cache-hit != 'true'
+        run: |
+          CACHE_LIST=$(gh cache list --key "$WRT_CONFIG-$WRT_INFO" | cut -f 1)
+          for CACHE_KEY in $CACHE_LIST; do
+            gh cache delete $CACHE_KEY
+          done
+
+          echo "caches cleanup done!"
 
       - name: Machine Information
         run: |
