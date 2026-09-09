@@ -1,0 +1,72 @@
+#!/bin/sh
+# MT5700M 数据面看门狗
+# 解决：PDP 会话在网侧失效，但 carrier=1、接口 up、DHCP 租约还在，
+#       mt5700m-manager 的 monitor 判定"一切正常"，只能手动点重新拨号。
+
+IFACE=MT5700M
+STATE=/var/run/mt5700m-watchdog
+LOG_TAG=mt5700m-watchdog
+
+# 可调参数
+INTERVAL=20        # 轮询间隔（秒）
+FAIL_MAX=2         # 连续几次不通才动手
+COOLDOWN=120       # 两次重拨最小间隔（秒）
+ESCALATE=3         # 连续重拨几次仍不通，升级到射频重启
+TARGETS="223.5.5.5 119.29.29.29 180.76.76.76"
+
+log() { logger -t "$LOG_TAG" -- "$*"; }
+
+probe() {
+	local dev="$1" t
+	for t in $TARGETS; do
+		ping -I "$dev" -c 1 -W 3 "$t" >/dev/null 2>&1 && return 0
+	done
+	return 1
+}
+
+mkdir -p "$STATE"
+fail=0
+redials=0
+last=0
+
+log "started: interval=${INTERVAL}s fail_max=${FAIL_MAX} cooldown=${COOLDOWN}s"
+
+while :; do
+	sleep "$INTERVAL"
+
+	st=$(ubus call network.interface.$IFACE status 2>/dev/null) || continue
+	[ "$(echo "$st" | jsonfilter -e '@.up')" = "true" ] || { fail=0; continue; }
+	dev=$(echo "$st" | jsonfilter -e '@.l3_device')
+	[ -n "$dev" ] && [ -e "/sys/class/net/$dev" ] || { fail=0; continue; }
+
+	if probe "$dev"; then
+		[ "$fail" -gt 0 ] && log "链路恢复"
+		fail=0
+		redials=0
+		continue
+	fi
+
+	fail=$((fail + 1))
+	log "数据面不通 ($fail/$FAIL_MAX) dev=$dev"
+	[ "$fail" -ge "$FAIL_MAX" ] || continue
+
+	now=$(date +%s)
+	[ $((now - last)) -ge "$COOLDOWN" ] || continue
+	last=$now
+	fail=0
+	redials=$((redials + 1))
+
+	if [ "$redials" -ge "$ESCALATE" ]; then
+		log "重拨 $redials 次无效，重启射频 (AT+CFUN=0/1)"
+		/usr/sbin/mt5700m-at airplane 1 >/dev/null 2>&1
+		sleep 5
+		/usr/sbin/mt5700m-at airplane 0 >/dev/null 2>&1
+		sleep 15
+		redials=0
+	else
+		log "触发自动重拨（第 $redials 次）"
+	fi
+
+	/usr/sbin/mt5700m-manager redial >/dev/null 2>&1 \
+		|| log "redial 返回失败（manager 可能正忙）"
+done
