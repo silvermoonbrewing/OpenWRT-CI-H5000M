@@ -63,5 +63,9 @@ config_load wireless
 config_foreach set_radio wifi-device
 config_foreach set_iface wifi-iface
 uci -q commit wireless
-
+#---------- MT5700M 数据面看门狗 ----------
+chmod 755 /usr/bin/mt5700m-watchdog 2>/dev/null
+chmod 755 /etc/init.d/mt5700m-watchdog 2>/dev/null
+/etc/init.d/mt5700m-watchdog enable
+/etc/init.d/mt5700m-watchdog start
 exit 0
