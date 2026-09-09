@@ -205,17 +205,19 @@ jobs:
             mkdir -p ./wrt/files
             cp -rf $GITHUB_WORKSPACE/Files/. ./wrt/files/
 
-            # 只转换脚本换行符
-            find ./wrt/files/etc/uci-defaults/ -type f \
-              -exec dos2unix {} \; 2>/dev/null || true
-
-            find ./wrt/files/etc/uci-defaults/ -type f \
-              -exec chmod +x {} \; 2>/dev/null || true
+            # 脚本目录：统一换行符并赋执行位
+            for DIR in ./wrt/files/etc/uci-defaults \
+                       ./wrt/files/etc/init.d \
+                       ./wrt/files/usr/bin; do
+              [ -d "$DIR" ] || continue
+              find "$DIR" -type f -exec dos2unix {} \; 2>/dev/null || true
+              find "$DIR" -type f -exec chmod 755 {} \; 2>/dev/null || true
+            done
 
             chmod 755 ./wrt/files/etc/openclash/core/clash_meta 2>/dev/null || true
 
             echo "===== files ====="
-            find ./wrt/files/ -type f
+            find ./wrt/files/ -type f -exec ls -l {} \;
             echo "================="
           fi
 
