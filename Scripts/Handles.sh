@@ -233,4 +233,18 @@ if [ -f "$RUST_FILE" ]; then
 	else
 		echo "rust fix failed; continuing!"
 	fi
+fi#---------- 修正 QModem 版本号 ----------
+# apk 不接受 "3.4.0-rc.3" 这种预发布格式（连字符+点号），
+# 23 个 qmodem 包共用 version.mk 里的 QMODEM_VERSION，必须在这里统一改。
+QMODEM_VER_MK="$PKG_PATH/../feeds/qmodem/version.mk"
+if [ -f "$QMODEM_VER_MK" ]; then
+	OLD_VER=$(grep -oP '^QMODEM_VERSION:=\K.*' "$QMODEM_VER_MK")
+	NEW_VER=$(echo "$OLD_VER" | sed -E 's/-rc\.?([0-9]+)/_rc\1/; s/-beta\.?([0-9]+)/_beta\1/; s/-alpha\.?([0-9]+)/_alpha\1/')
+	if [ "$OLD_VER" != "$NEW_VER" ]; then
+		sed -i "s|^QMODEM_VERSION:=.*|QMODEM_VERSION:=$NEW_VER|" "$QMODEM_VER_MK"
+		echo "QModem 版本号已修正：$OLD_VER -> $NEW_VER"
+	else
+		echo "QModem 版本号无需修正：$OLD_VER"
+	fi
 fi
+
