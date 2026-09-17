@@ -8,7 +8,8 @@ name: H5000M
 on:
   #自动编译：每天北京时间凌晨3点（UTC 19:00）
   schedule:
-    - cron: 0 19 * * *
+    - cron: '0 19 * * *'
+
   #手动编译
   workflow_dispatch:
     inputs:
@@ -16,43 +17,69 @@ on:
         description: '手动追加插件包，多个请用\n符号隔开。'
         required: false
         type: string
+
       TEST:
         description: '仅输出配置文件，不编译固件。'
-        default: 'false'
+        default: false
         required: false
         type: boolean
 
 #CI权限
 permissions: write-all
 
+# ============================================================
+# 防止定时编译与手动编译同时运行
+#
+# 后触发的任务排队等待
+# 不取消正在运行的任务
+# 防止两个任务同时操作 Cache / Release
+# ============================================================
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
 #CI任务
 jobs:
   config:
     name: H5000M
-    #调用公用编译核心WRT-CORE.yml
+
+    #调用公用编译核心 WRT-CORE.yml
     uses: ./.github/workflows/WRT-CORE.yml
+
     with:
-      #编译配置（对应 Config/H5000M.txt）
+      #编译配置
       WRT_CONFIG: H5000M
-      #默认主题（argon 或 aurora，二选一）
+
+      #默认主题
       WRT_THEME: argon
+
       #默认主机名
       WRT_NAME: Hiveton_H5000M
-      #默认WIFI名称（实际按频段区分，见 Files/etc/uci-defaults/99-mt6000-custom）
+
+      #默认 WIFI 名称
       WRT_SSID: Hiveton
-      #默认WIFI密码
+
+      #默认 WIFI 密码
       WRT_WORD: ljx2026@.
+
       #默认地址
       WRT_IP: 192.168.99.1
-      #默认密码，仅作提示，修改无用
+
+      #默认密码
       WRT_PW: admin
-      #源码链接
+
+      #源码
       WRT_REPO: https://github.com/immortalwrt/immortalwrt.git
+
       #源码分支
       WRT_BRANCH: openwrt-25.12
+
       #源码名称
       WRT_SOURCE: immortalwrt/immortalwrt
+
       #插件调整
-      WRT_PACKAGE: ${{inputs.PACKAGE}}
+      WRT_PACKAGE: ${{ inputs.PACKAGE }}
+
       #仅输出配置文件
-      WRT_TEST: ${{inputs.TEST}}
+      WRT_TEST: ${{ inputs.TEST }}
