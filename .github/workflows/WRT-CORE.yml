@@ -1,51 +1,86 @@
 # SPDX-License-Identifier: MIT
 # Copyright (C) 2026 VIKINGYFY
 
-# 云编译公用核心
+# ============================================================
+# Hiveton H5000M 云编译公用核心
+#
+# 保留：
+#
+# - OpenClash
+# - PassWall
+# - ShadowSocksR Plus+
+# - QModem
+# - MT5700M
+# - H5000M 专用配置
+# - 原有 Release 二次验证
+#
+# 增强：
+#
+# 1. H5000M sysupgrade.bin 必须真实存在
+# 2. sysupgrade.bin 必须大于 1MB
+# 3. TEST=true 不创建 Release
+# 4. Release 创建以后再次检查真实附件
+# ============================================================
+
 name: WRT-CORE
 
 on:
   workflow_call:
     inputs:
+
       WRT_CONFIG:
         required: true
         type: string
+
       WRT_THEME:
         required: true
         type: string
+
       WRT_NAME:
         required: true
         type: string
+
       WRT_SSID:
         required: true
         type: string
+
       WRT_WORD:
         required: true
         type: string
+
       WRT_IP:
         required: true
         type: string
+
       WRT_PW:
         required: true
         type: string
+
       WRT_REPO:
         required: true
         type: string
+
       WRT_BRANCH:
         required: true
         type: string
+
       WRT_SOURCE:
         required: true
         type: string
+
       WRT_PACKAGE:
         required: false
         type: string
+
       WRT_TEST:
         required: false
         type: string
 
+
 env:
+
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   WRT_CONFIG: ${{ inputs.WRT_CONFIG }}
   WRT_THEME: ${{ inputs.WRT_THEME }}
   WRT_NAME: ${{ inputs.WRT_NAME }}
@@ -53,102 +88,245 @@ env:
   WRT_WORD: ${{ inputs.WRT_WORD }}
   WRT_IP: ${{ inputs.WRT_IP }}
   WRT_PW: ${{ inputs.WRT_PW }}
+
   WRT_REPO: ${{ inputs.WRT_REPO }}
   WRT_BRANCH: ${{ inputs.WRT_BRANCH }}
   WRT_SOURCE: ${{ inputs.WRT_SOURCE }}
+
   WRT_PACKAGE: ${{ inputs.WRT_PACKAGE }}
   WRT_TEST: ${{ inputs.WRT_TEST }}
 
+
 jobs:
+
   core:
+
     name: ${{ inputs.WRT_SOURCE }}
+
     runs-on: ubuntu-24.04
 
     steps:
+
+      # ========================================================
+      # Checkout
+      # ========================================================
+
       - name: Checkout Projects
         uses: actions/checkout@main
 
+
+      # ========================================================
+      # 初始化环境
+      # ========================================================
+
       - name: Initialization Environment
+
         env:
           DEBIAN_FRONTEND: noninteractive
+
         run: |
+
           sudo -E apt -yqq purge firefox
+
           sudo -E apt -yqq update
-          sudo -E apt -yqq install dos2unix libfuse-dev
+
+          sudo -E apt -yqq install \
+            dos2unix \
+            libfuse-dev
+
           sudo -E apt -yqq autoremove --purge
+
           sudo -E apt -yqq clean
 
-          sudo -E bash -c 'bash <(curl -sL https://build-scripts.immortalwrt.org/init_build_environment.sh)'
 
-          sudo ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+          sudo -E bash -c \
+            'bash <(curl -sL https://build-scripts.immortalwrt.org/init_build_environment.sh)'
+
+
+          sudo ln -sf \
+            /usr/share/zoneinfo/Asia/Shanghai \
+            /etc/localtime
+
 
           sudo mkdir -p /mnt/build_wrt
-          sudo chown $USER:$USER /mnt/build_wrt
-          sudo ln -s /mnt/build_wrt $GITHUB_WORKSPACE/wrt
+
+          sudo chown "$USER":"$USER" /mnt/build_wrt
+
+          sudo ln -s \
+            /mnt/build_wrt \
+            "$GITHUB_WORKSPACE/wrt"
+
+
+      # ========================================================
+      # 初始化变量
+      # ========================================================
 
       - name: Initialization Values
+
         run: |
-          echo "WRT_DATE=$(TZ=UTC-8 date +"%y.%m.%d-%H.%M.%S")" >> $GITHUB_ENV
-          echo "WRT_MARK=${GITHUB_REPOSITORY%%/*}" >> $GITHUB_ENV
-          echo "WRT_INFO=${WRT_SOURCE%%/*}" >> $GITHUB_ENV
-          echo "WRT_TARGET=$(grep -m 1 -oP '^CONFIG_TARGET_\K[\w]+(?=\=y)' ./Config/$WRT_CONFIG.txt)" >> $GITHUB_ENV
-          echo "WRT_WIFI=wifi-yes" >> $GITHUB_ENV
-          echo "WRT_KVER=none" >> $GITHUB_ENV
-          echo "WRT_LIST=none" >> $GITHUB_ENV
+
+          echo "WRT_DATE=$(TZ=UTC-8 date +"%y.%m.%d-%H.%M.%S")" \
+            >> "$GITHUB_ENV"
+
+
+          echo "WRT_MARK=${GITHUB_REPOSITORY%%/*}" \
+            >> "$GITHUB_ENV"
+
+
+          echo "WRT_INFO=${WRT_SOURCE%%/*}" \
+            >> "$GITHUB_ENV"
+
+
+          echo "WRT_TARGET=$(grep -m 1 \
+            -oP '^CONFIG_TARGET_\K[\w]+(?=\=y)' \
+            ./Config/$WRT_CONFIG.txt)" \
+            >> "$GITHUB_ENV"
+
+
+          echo "WRT_WIFI=wifi-yes" \
+            >> "$GITHUB_ENV"
+
+
+          echo "WRT_KVER=none" \
+            >> "$GITHUB_ENV"
+
+
+          echo "WRT_LIST=none" \
+            >> "$GITHUB_ENV"
+
+
+      # ========================================================
+      # 克隆 ImmortalWrt
+      # ========================================================
 
       - name: Clone Code
+
         run: |
-          git clone --depth=1 --single-branch --branch $WRT_BRANCH $WRT_REPO ./wrt/
+
+          git clone \
+            --depth=1 \
+            --single-branch \
+            --branch "$WRT_BRANCH" \
+            "$WRT_REPO" \
+            ./wrt/
+
 
           cd ./wrt/
-          echo "WRT_HASH=$(git log -1 --pretty=format:'%h')" >> $GITHUB_ENV
+
+
+          echo "WRT_HASH=$(git log -1 --pretty=format:'%h')" \
+            >> "$GITHUB_ENV"
+
 
           # GitHub Action 移除国内下载源
           PROJECT_MIRRORS_FILE="./scripts/projectsmirrors.json"
+
+
           if [ -f "$PROJECT_MIRRORS_FILE" ]; then
-            sed -i '/.cn\//d; /tencent/d; /aliyun/d' "$PROJECT_MIRRORS_FILE"
+
+            sed -i \
+              '/.cn\//d; /tencent/d; /aliyun/d' \
+              "$PROJECT_MIRRORS_FILE"
+
           fi
 
+
+      # ========================================================
+      # 脚本处理
+      # ========================================================
+
       - name: Check Scripts
+
         run: |
-          find ./ -maxdepth 3 -type f -iregex ".*\(txt\|sh\)$" \
+
+          find ./ \
+            -maxdepth 3 \
+            -type f \
+            -iregex ".*\(txt\|sh\)$" \
             -exec dos2unix {} \; \
             -exec chmod +x {} \;
 
+
+      # ========================================================
+      # Cache
+      # ========================================================
+
       - name: Check Caches
+
         id: check-cache
+
         if: env.WRT_TEST != 'true'
+
         uses: actions/cache@main
+
         with:
+
           key: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-${{ env.WRT_HASH }}
-          restore-keys: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}
+
+          restore-keys: |
+            ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}
+
           path: |
             ./wrt/.ccache
             ./wrt/staging_dir/host*
             ./wrt/staging_dir/tool*
 
+
       - name: Update Caches
+
         if: env.WRT_TEST != 'true'
+
         run: |
+
           if [ -d "./wrt/staging_dir" ]; then
-            find "./wrt/staging_dir" -type d -name "stamp" -not -path "*target*" | while read -r DIR; do
-              find "$DIR" -type f -exec touch {} +
-            done
+
+            find "./wrt/staging_dir" \
+              -type d \
+              -name "stamp" \
+              -not -path "*target*" \
+              | while read -r DIR; do
+
+                  find "$DIR" \
+                    -type f \
+                    -exec touch {} +
+
+                done
+
 
             mkdir -p ./wrt/tmp
+
             echo "1" > ./wrt/tmp/.build
 
+
             echo "toolchain skiped done!"
+
           else
+
             echo "caches missed!"
+
           fi
 
+
+      # ========================================================
+      # Feeds
+      #
+      # 保留 H5000M 原有专用 feeds：
+      #
+      # helloworld
+      # openclash
+      # qmodem
+      # mt5700m
+      # ========================================================
+
       - name: Update Feeds
+
         run: |
+
           cd ./wrt/
 
-          # 追加自定义 feeds
+
           echo "" >> feeds.conf.default
+
 
           cat >> feeds.conf.default <<-EOF
           src-git mosdns https://github.com/sbwml/luci-app-mosdns.git;v5
@@ -161,242 +339,551 @@ jobs:
           src-git mt5700m https://github.com/FAN789/luci-app-mt5700m.git;main
           EOF
 
+
           echo "===== feeds.conf.default ====="
+
           cat feeds.conf.default
+
           echo "============================="
+
 
           ./scripts/feeds update -a
 
-          # 删除源码树自带的同名包，让自定义 feeds 里的版本生效
+
+          # 删除源码树自带同名包
           rm -rf ./feeds/luci/applications/luci-app-argon-config
+
           rm -rf ./feeds/luci/applications/luci-app-openclash
+
           rm -rf ./feeds/luci/applications/luci-app-passwall
+
           rm -rf ./feeds/luci/themes/luci-theme-argon
+
           rm -rf ./feeds/packages/net/mosdns
+
           rm -rf ./feeds/packages/net/v2ray-geodata
+
 
           # ImmortalWrt 自带版本偏旧
           rm -rf ./feeds/packages/net/xray-core
+
           rm -rf ./feeds/packages/net/sing-box
+
           rm -rf ./feeds/packages/net/hysteria
+
           rm -rf ./feeds/packages/net/naiveproxy
 
-          # 重建索引
+
+          # 删除以后重新建立索引
           ./scripts/feeds update -i
+
 
           ./scripts/feeds install -a
 
-          # 替换为 Go 1.27（Xray-core 26.9.9 起要求 go >= 1.27）
-          # 必须放在 feeds install -a 之后，否则 package/feeds 里的软链会断
+
+          # ====================================================
+          # Go 1.27
+          #
+          # 必须在 feeds install -a 以后替换
+          # 避免 package/feeds 下的软链接断掉
+          # ====================================================
+
           rm -rf ./feeds/packages/lang/golang
-          git clone --depth=1 --single-branch --branch 27.x \
+
+
+          git clone \
+            --depth=1 \
+            --single-branch \
+            --branch 27.x \
             https://github.com/sbwml/packages_lang_golang.git \
             ./feeds/packages/lang/golang
 
+
           echo "===== golang version ====="
-          grep -E "^GO_VERSION_(MAJOR_MINOR|PATCH)" ./feeds/packages/lang/golang/golang/Makefile
+
+          grep -E \
+            "^GO_VERSION_(MAJOR_MINOR|PATCH)" \
+            ./feeds/packages/lang/golang/golang/Makefile
+
           echo "=========================="
 
-          # 清理断链符号链接
-          find ./package/feeds/ -xtype l -exec rm -f {} + 2>/dev/null || true
+
+          # 清理断链
+          find ./package/feeds/ \
+            -xtype l \
+            -exec rm -f {} + \
+            2>/dev/null || true
+
+
+      # ========================================================
+      # 自定义 Packages
+      # ========================================================
 
       - name: Custom Packages
+
         run: |
+
           cd ./wrt/package/
 
-          $GITHUB_WORKSPACE/Scripts/Packages.sh
-          $GITHUB_WORKSPACE/Scripts/Handles.sh
+
+          "$GITHUB_WORKSPACE/Scripts/Packages.sh"
+
+          "$GITHUB_WORKSPACE/Scripts/Handles.sh"
+
+
+      # ========================================================
+      # 自定义 Files
+      #
+      # H5000M 里面还有 5G watchdog / init.d / usr/bin
+      # 所以这些脚本目录都要处理执行权限
+      # ========================================================
 
       - name: Custom Files
-        run: |
-          if [ -d "$GITHUB_WORKSPACE/Files" ]; then
-            mkdir -p ./wrt/files
-            cp -rf $GITHUB_WORKSPACE/Files/. ./wrt/files/
 
-            # 脚本目录：统一换行符并赋执行位
-            for DIR in ./wrt/files/etc/uci-defaults \
-                       ./wrt/files/etc/init.d \
-                       ./wrt/files/usr/bin; do
+        run: |
+
+          if [ -d "$GITHUB_WORKSPACE/Files" ]; then
+
+            mkdir -p ./wrt/files
+
+
+            cp -rf \
+              "$GITHUB_WORKSPACE/Files/." \
+              ./wrt/files/
+
+
+            for DIR in \
+              ./wrt/files/etc/uci-defaults \
+              ./wrt/files/etc/init.d \
+              ./wrt/files/usr/bin; do
+
+
               [ -d "$DIR" ] || continue
-              find "$DIR" -type f -exec dos2unix {} \; 2>/dev/null || true
-              find "$DIR" -type f -exec chmod 755 {} \; 2>/dev/null || true
+
+
+              find "$DIR" \
+                -type f \
+                -exec dos2unix {} \; \
+                2>/dev/null || true
+
+
+              find "$DIR" \
+                -type f \
+                -exec chmod 755 {} \; \
+                2>/dev/null || true
+
+
             done
 
-            chmod 755 ./wrt/files/etc/openclash/core/clash_meta 2>/dev/null || true
+
+            chmod 755 \
+              ./wrt/files/etc/openclash/core/clash_meta \
+              2>/dev/null || true
+
 
             echo "===== files ====="
-            find ./wrt/files/ -type f -exec ls -l {} \;
+
+            find ./wrt/files/ \
+              -type f \
+              -exec ls -l {} \;
+
             echo "================="
+
           fi
 
+
+      # ========================================================
+      # 应用配置
+      # ========================================================
+
       - name: Custom Settings
+
         run: |
+
           cd ./wrt/
 
-          cat $GITHUB_WORKSPACE/Config/$WRT_CONFIG.txt >> .config
 
-          $GITHUB_WORKSPACE/Scripts/Settings.sh
+          cat \
+            "$GITHUB_WORKSPACE/Config/$WRT_CONFIG.txt" \
+            >> .config
 
-          make defconfig -j$(nproc)
-          make clean -j$(nproc)
+
+          "$GITHUB_WORKSPACE/Scripts/Settings.sh"
+
+
+          make defconfig -j"$(nproc)"
+
+          make clean -j"$(nproc)"
+
+
+      # ========================================================
+      # 下载源码包
+      # ========================================================
 
       - name: Download Packages
+
         if: env.WRT_TEST != 'true'
+
         run: |
+
           cd ./wrt/
 
-          make download -j$(nproc)
+          make download -j"$(nproc)"
+
+
+      # ========================================================
+      # 编译固件
+      # ========================================================
 
       - name: Compile Firmware
+
         if: env.WRT_TEST != 'true'
+
         run: |
+
           cd ./wrt/
 
-          make -j$(nproc) || \
-          make -j$(nproc) V=s || \
-          make -j1 V=s
+
+          make -j"$(nproc)" \
+            || make -j"$(nproc)" V=s \
+            || make -j1 V=s
+
+
+      # ========================================================
+      # 清理 Cache
+      # ========================================================
 
       - name: Cleanup Caches
-        if: success() && env.WRT_TEST != 'true' && steps.check-cache.outputs.cache-hit != 'true'
+
+        if: >
+          success() &&
+          env.WRT_TEST != 'true' &&
+          steps.check-cache.outputs.cache-hit != 'true'
+
         run: |
-          CACHE_LIST=$(gh cache list --key "$WRT_CONFIG-$WRT_INFO" | cut -f 1)
+
+          CACHE_LIST=$(gh cache list \
+            --key "$WRT_CONFIG-$WRT_INFO" \
+            | cut -f 1)
+
 
           for CACHE_KEY in $CACHE_LIST; do
+
             gh cache delete "$CACHE_KEY"
+
           done
+
 
           echo "caches cleanup done!"
 
+
+      # ========================================================
+      # 编译机信息
+      # ========================================================
+
       - name: Machine Information
+
         run: |
+
           cd ./wrt/
 
-          echo "======================="
-          lscpu | grep -E "name|Core|Thread"
-          echo "======================="
-          df -h
-          echo "======================="
-          du -h --max-depth=1
+
           echo "======================="
 
-      # ============================================================
-      # 固件整理
-      # ============================================================
+          lscpu | grep -E "name|Core|Thread"
+
+          echo "======================="
+
+          df -h
+
+          echo "======================="
+
+          du -h --max-depth=1
+
+          echo "======================="
+
+
+      # ========================================================
+      # 整理固件
+      # ========================================================
 
       - name: Package Firmware
+
+        shell: bash
+
         run: |
+
           set -euo pipefail
+
 
           cd ./wrt/
 
+
           rm -rf ./upload/
+
           mkdir -p ./upload/
 
-          cp -f ./.config \
+
+          cp -f \
+            ./.config \
             ./upload/Config-"$WRT_CONFIG"-"$WRT_INFO"-"$WRT_BRANCH"-"$WRT_DATE".txt
 
-          if [[ $WRT_TEST != 'true' ]]; then
 
-            echo "WRT_KVER=$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^kernel - \K[\d\.]+' {} \;)" >> $GITHUB_ENV
+          if [[ "$WRT_TEST" != 'true' ]]; then
 
-            echo "WRT_LIST=$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^luci-(app|theme)[^ ]*' {} \; | tr '\n' ' ')" >> $GITHUB_ENV
 
-            echo ""
+            # ==================================================
+            # 内核版本
+            # ==================================================
+
+            WRT_KERNEL_VERSION=$(
+
+              find ./bin/targets/ \
+                -type f \
+                -name "*.manifest" \
+                -exec grep -oP \
+                  '^kernel - \K[\d\.]+' \
+                  {} \; \
+                | head -n 1
+
+            )
+
+
+            if [ -n "$WRT_KERNEL_VERSION" ]; then
+
+              echo "WRT_KVER=$WRT_KERNEL_VERSION" \
+                >> "$GITHUB_ENV"
+
+            fi
+
+
+            # ==================================================
+            # LuCI 插件列表
+            # ==================================================
+
+            WRT_LUCI_LIST=$(
+
+              find ./bin/targets/ \
+                -type f \
+                -name "*.manifest" \
+                -exec grep -oP \
+                  '^luci-(app|theme)[^ ]*' \
+                  {} \; \
+                | sort -u \
+                | tr '\n' ' '
+
+            )
+
+
+            if [ -n "$WRT_LUCI_LIST" ]; then
+
+              echo "WRT_LIST=$WRT_LUCI_LIST" \
+                >> "$GITHUB_ENV"
+
+            fi
+
+
+            echo
             echo "========== 原始编译产物 =========="
-            find ./bin/targets/ -type f -printf '%p\t%k KB\n' | sort
+
+            find ./bin/targets/ \
+              -type f \
+              -printf '%p\t%k KB\n' \
+              | sort
+
             echo "=================================="
-            echo ""
+
 
             # 删除不需要发布的文件
             find ./bin/targets/ \
-              -iregex ".*\(buildinfo\|json\|sha256sums\|packages\)$" \
+              -iregex \
+              ".*\(buildinfo\|json\|sha256sums\|packages\)$" \
               -exec rm -rf {} +
 
-            # 将匹配目标平台的固件重命名
+
+            # ==================================================
+            # 重命名目标固件
+            # ==================================================
+
             while IFS= read -r -d '' FILE; do
+
 
               EXT=$(basename "$FILE" | cut -d '.' -f 2-)
 
-              NAME=$(basename "$FILE" |
-                cut -d '.' -f 1 |
-                grep -io "\($WRT_TARGET\).*")
 
-              NEW_FILE="$NAME"-"$WRT_INFO"-"$WRT_BRANCH"-"$WRT_WIFI"-"$WRT_DATE"."$EXT"
+              NAME=$(
 
+                basename "$FILE" \
+                  | cut -d '.' -f 1 \
+                  | grep -io "\($WRT_TARGET\).*"
+
+              )
+
+
+              NEW_FILE="$NAME-$WRT_INFO-$WRT_BRANCH-$WRT_WIFI-$WRT_DATE.$EXT"
+
+
+              echo
               echo "重命名固件："
               echo "$FILE"
               echo "-> ./upload/$NEW_FILE"
+              echo
 
-              mv -f "$FILE" "./upload/$NEW_FILE"
+
+              mv -f \
+                "$FILE" \
+                "./upload/$NEW_FILE"
+
 
             done < <(
+
               find ./bin/targets/ \
                 -type f \
                 -iname "*$WRT_TARGET*" \
                 -print0
+
             )
 
-            # 将剩余文件移动到 upload
+
+            # 剩余文件移动到 upload
             find ./bin/targets/ \
               -type f \
               -exec mv -f {} ./upload/ \;
 
-            echo ""
+
+            echo
             echo "========== 待发布文件 =========="
+
+
             find ./upload/ \
               -maxdepth 1 \
               -type f \
-              -printf '%f\t%k KB\n' |
-              sort
+              -printf '%f\t%k KB\n' \
+              | sort
+
+
             echo "================================"
-            echo ""
+            echo
 
-            # ------------------------------------------------------
-            # 核心检查
-            # H5000M 必须存在 sysupgrade.bin
-            # ------------------------------------------------------
 
-            if ! find ./upload/ \
-              -maxdepth 1 \
-              -type f \
-              -iname '*h5000m*sysupgrade*.bin' \
-              -print \
-              -quit |
-              grep -q .; then
+            # ==================================================
+            # H5000M 固件核心验证
+            #
+            # 必须满足：
+            #
+            # 1. H5000M sysupgrade.bin 存在
+            # 2. 文件必须大于 1MB
+            # ==================================================
 
-              echo ""
+            SYSUPGRADE_FILE=$(
+
+              find ./upload/ \
+                -maxdepth 1 \
+                -type f \
+                -iname '*h5000m*sysupgrade*.bin' \
+                -print \
+                -quit
+
+            )
+
+
+            if [ -z "$SYSUPGRADE_FILE" ]; then
+
+              echo
               echo "::error::没有找到 H5000M sysupgrade.bin！"
               echo "::error::虽然 make 可能返回成功，但是没有生成真正的 H5000M 固件。"
               echo "::error::停止创建 GitHub Release。"
-              echo ""
+              echo
 
               exit 1
+
             fi
 
-            echo ""
-            echo "H5000M sysupgrade.bin 检查成功。"
-            echo ""
+
+            SYSUPGRADE_SIZE=$(stat -c%s "$SYSUPGRADE_FILE")
+
+
+            if [ "$SYSUPGRADE_SIZE" -lt 1048576 ]; then
+
+              echo
+              echo "::error::H5000M sysupgrade.bin 大小异常！"
+              echo "::error::文件：$SYSUPGRADE_FILE"
+              echo "::error::大小：${SYSUPGRADE_SIZE} bytes"
+              echo "::error::小于 1MB，停止创建 GitHub Release。"
+              echo
+
+              exit 1
+
+            fi
+
+
+            echo
+            echo "[OK] H5000M sysupgrade.bin 检查成功"
+            echo "[OK] 文件：$SYSUPGRADE_FILE"
+            echo "[OK] 大小：${SYSUPGRADE_SIZE} bytes"
+            echo
+
+
           fi
 
-      # ============================================================
+
+      # ========================================================
+      # TEST 模式
+      #
+      # TEST=true：
+      #
+      # 只生成 Config
+      # 不编译固件
+      # 不创建 Release
+      # 不占最新10个正式固件名额
+      # ========================================================
+
+      - name: Test Mode Result
+
+        if: env.WRT_TEST == 'true'
+
+        run: |
+
+          echo
+          echo "=================================================="
+          echo "TEST 模式"
+          echo "=================================================="
+          echo
+          echo "只生成配置文件"
+          echo "不编译 H5000M 固件"
+          echo "不创建 GitHub Release"
+          echo
+          echo "=================================================="
+
+
+      # ========================================================
       # 创建 GitHub Release
-      # 不再使用 softprops/action-gh-release@master
-      # ============================================================
+      #
+      # H5000M 当前使用 GitHub CLI
+      # 不依赖 softprops/action-gh-release
+      # ========================================================
 
       - name: Release Firmware
+
+        if: env.WRT_TEST != 'true'
+
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-${{ env.WRT_BRANCH }}-${{ env.WRT_DATE }}
 
         run: |
+
           set -euo pipefail
+
 
           cd ./wrt/
 
-          echo ""
+
+          echo
           echo "准备创建 Release："
           echo "$RELEASE_TAG"
-          echo ""
+          echo
+
 
           cat > /tmp/release-body.md <<EOF
           源码：${WRT_REPO}
@@ -416,93 +903,104 @@ jobs:
           插件列表：${WRT_LIST}
           EOF
 
-          echo ""
+
+          echo
           echo "========== 上传文件 =========="
+
           ls -lh ./upload/
+
           echo "=============================="
-          echo ""
 
-          # 使用 GitHub 官方 CLI 创建 Release
-          #
-          # 这里如果：
-          # 1. Release 创建失败
-          # 2. Token 没权限
-          # 3. 固件上传失败
-          # 4. GitHub API 返回错误
-          #
-          # Workflow 都会直接变红
 
-          gh release create "$RELEASE_TAG" ./upload/* \
+          gh release create \
+            "$RELEASE_TAG" \
+            ./upload/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "$RELEASE_TAG" \
             --notes-file /tmp/release-body.md
 
-          echo ""
-          echo "GitHub Release 创建命令执行完成。"
-          echo ""
 
-      # ============================================================
-      # 上传结果二次验证
-      # ============================================================
+          echo
+          echo "[OK] GitHub Release 创建命令执行完成"
+          echo
+
+
+      # ========================================================
+      # Release 上传后二次验证
+      #
+      # 只有正常编译模式才执行
+      # ========================================================
 
       - name: Verify Release
+
+        if: env.WRT_TEST != 'true'
+
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-${{ env.WRT_BRANCH }}-${{ env.WRT_DATE }}
 
         run: |
+
           set -euo pipefail
 
-          echo ""
+
+          echo
           echo "========== Release 校验 =========="
-          echo ""
+          echo
+
 
           echo "Release Tag：$RELEASE_TAG"
-          echo ""
+          echo
 
-          # 查询 GitHub 上真实存在的 Release
+
+          # 读取 GitHub 上真实存在的 Release
           gh release view "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --json tagName,isDraft,isPrerelease,assets \
             --jq '.'
 
-          echo ""
+
+          echo
           echo "========== GitHub 已上传资产 =========="
-          echo ""
+          echo
+
 
           ASSETS="$(
+
             gh release view "$RELEASE_TAG" \
               --repo "$GITHUB_REPOSITORY" \
               --json assets \
               --jq '.assets[].name'
+
           )"
+
 
           printf '%s\n' "$ASSETS"
 
-          echo ""
+
+          echo
           echo "======================================="
-          echo ""
+          echo
 
-          if [[ $WRT_TEST != 'true' ]]; then
 
-            if ! printf '%s\n' "$ASSETS" |
-              grep -qiE 'h5000m.*sysupgrade.*\.bin$'; then
+          if ! printf '%s\n' "$ASSETS" \
+            | grep -qiE 'h5000m.*sysupgrade.*\.bin$'; then
 
-              echo ""
-              echo "::error::GitHub Release 已创建，但是里面没有 H5000M sysupgrade.bin！"
-              echo "::error::Release 上传结果校验失败。"
-              echo ""
+            echo
+            echo "::error::GitHub Release 已创建，但是里面没有 H5000M sysupgrade.bin！"
+            echo "::error::Release 上传结果校验失败。"
+            echo
 
-              exit 1
-            fi
+            exit 1
 
           fi
 
-          echo ""
+
+          echo
           echo "=================================="
           echo "Release 创建成功"
           echo "H5000M 固件上传成功"
           echo "Release 资产校验成功"
           echo "=================================="
-          echo ""
+          echo
