@@ -45,6 +45,7 @@
 # 5. 修复 QModem Next 中文包反向拉入主程序
 # 6. defconfig 后检查完整 QModem 不得被选中
 # 7. 最终 manifest 再次检查完整 QModem 不得进入固件
+# 8. TEST=true 时上传最终 Config 为 Actions Artifact
 # ============================================================
 
 name: WRT-CORE
@@ -941,7 +942,7 @@ jobs:
 
 
       # ========================================================
-      # 整理固件
+      # 整理固件 / 配置文件
       # ========================================================
 
       - name: Package Firmware
@@ -961,6 +962,8 @@ jobs:
           mkdir -p ./upload/
 
 
+          # 无论 TEST=true 还是正常编译，
+          # 都保存 make defconfig 后的最终配置文件。
           cp -f \
             ./.config \
             ./upload/Config-"$WRT_CONFIG"-"$WRT_INFO"-"$WRT_BRANCH"-"$WRT_DATE".txt
@@ -1280,32 +1283,83 @@ jobs:
 
 
       # ========================================================
-      # TEST 模式
+      # TEST 模式结果
       #
       # TEST=true：
       #
-      # 只生成 Config
+      # 只生成最终 Config
+      # 不下载源码包
       # 不编译固件
       # 不创建 Release
-      # 不占最新10个正式固件名额
       # ========================================================
 
       - name: Test Mode Result
 
         if: env.WRT_TEST == 'true'
 
+        shell: bash
+
         run: |
+
+          set -euo pipefail
+
 
           echo
           echo "=================================================="
           echo "TEST 模式"
           echo "=================================================="
           echo
-          echo "只生成配置文件"
+          echo "最终配置检查已经完成"
+          echo "不下载源码包"
           echo "不编译 H5000M 固件"
           echo "不创建 GitHub Release"
           echo
+          echo "生成的配置文件："
+          echo
+
+
+          find ./wrt/upload/ \
+            -maxdepth 1 \
+            -type f \
+            -name 'Config-*.txt' \
+            -exec ls -lh {} \;
+
+
+          echo
+          echo "配置文件将在下面的 Upload Test Config 步骤上传"
+          echo "任务完成后可在 GitHub Actions 的 Artifacts 中下载"
+          echo
           echo "=================================================="
+
+
+      # ========================================================
+      # TEST 模式上传 Config
+      #
+      # GitHub Actions Runner 在任务结束以后会被销毁。
+      #
+      # 因此 TEST=true 时必须将最终 Config
+      # 作为 GitHub Actions Artifact 上传保存。
+      #
+      # 正常编译模式不会执行这里，
+      # Config + 固件仍然通过 GitHub Release 发布。
+      # ========================================================
+
+      - name: Upload Test Config
+
+        if: env.WRT_TEST == 'true'
+
+        uses: actions/upload-artifact@v4
+
+        with:
+
+          name: Config-${{ inputs.WRT_CONFIG }}-${{ inputs.WRT_BRANCH }}
+
+          path: |
+            ./wrt/upload/Config-*.txt
+
+          if-no-files-found: error
+
+          retention-days: 7
 
 
       # ========================================================
