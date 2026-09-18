@@ -9,10 +9,32 @@
 # - OpenClash
 # - PassWall
 # - ShadowSocksR Plus+
-# - QModem
-# - MT5700M
+# - QModem feed
+#   仅用于提供：
+#     ubus-at-daemon
+#     sms-tool_q
+# - MT5700M 专用管理器
 # - H5000M 专用配置
 # - 原有 Release 二次验证
+#
+# H5000M 5G 管理原则：
+#
+#   luci-app-mt5700m      = 编译
+#   ubus-at-daemon        = 编译
+#   sms-tool_q            = 编译
+#
+#   qmodem                = 禁止
+#   modem_scan            = 禁止
+#   luci-app-qmodem       = 禁止
+#   luci-app-qmodem-next  = 禁止
+#
+# 避免 QModem 与 MT5700M manager
+# 同时管理 eth2，重复生成：
+#
+#   MT5700M
+#   MT5700Mv6
+#   USB
+#   USBv6
 #
 # 增强：
 #
@@ -20,6 +42,9 @@
 # 2. sysupgrade.bin 必须大于 1MB
 # 3. TEST=true 不创建 Release
 # 4. Release 创建以后再次检查真实附件
+# 5. 修复 QModem Next 中文包反向拉入主程序
+# 6. defconfig 后检查完整 QModem 不得被选中
+# 7. 最终 manifest 再次检查完整 QModem 不得进入固件
 # ============================================================
 
 name: WRT-CORE
@@ -316,11 +341,26 @@ jobs:
       # openclash
       # qmodem
       # mt5700m
+      #
+      # 注意：
+      #
+      # QModem feed 必须保留，
+      # 因为 luci-app-mt5700m 依赖：
+      #
+      #   ubus-at-daemon
+      #   sms-tool_q
+      #
+      # 但是禁止完整 qmodem 进入固件。
       # ========================================================
 
       - name: Update Feeds
 
+        shell: bash
+
         run: |
+
+          set -euo pipefail
+
 
           cd ./wrt/
 
@@ -340,17 +380,22 @@ jobs:
           EOF
 
 
+          echo
           echo "===== feeds.conf.default ====="
 
           cat feeds.conf.default
 
           echo "============================="
+          echo
 
 
           ./scripts/feeds update -a
 
 
+          # ----------------------------------------------------
           # 删除源码树自带同名包
+          # ----------------------------------------------------
+
           rm -rf ./feeds/luci/applications/luci-app-argon-config
 
           rm -rf ./feeds/luci/applications/luci-app-openclash
@@ -364,7 +409,10 @@ jobs:
           rm -rf ./feeds/packages/net/v2ray-geodata
 
 
+          # ----------------------------------------------------
           # ImmortalWrt 自带版本偏旧
+          # ----------------------------------------------------
+
           rm -rf ./feeds/packages/net/xray-core
 
           rm -rf ./feeds/packages/net/sing-box
@@ -378,7 +426,92 @@ jobs:
           ./scripts/feeds update -i
 
 
+          # 安装所有 feed 包定义到 package/feeds
+          #
+          # install -a 不代表全部编入固件，
+          # 最终是否编入由 .config 决定。
           ./scripts/feeds install -a
+
+
+          # ====================================================
+          # 修复 QModem Next 中文包依赖
+          #
+          # QModem 上游 Makefile 中存在：
+          #
+          #   DEFAULT:=LUCI_LANG_zh_Hans||(ALL&&m)
+          #   DEPENDS:=+luci-app-qmodem-next
+          #
+          # 当 CONFIG_LUCI_LANG_zh_Hans=y 时，
+          # "+" 可能反向选中 luci-app-qmodem-next，
+          # 进一步拉入完整 qmodem。
+          #
+          # H5000M 只需要 QModem feed 中的：
+          #
+          #   ubus-at-daemon
+          #   sms-tool_q
+          #
+          # 所以把强制依赖：
+          #
+          #   +luci-app-qmodem-next
+          #
+          # 修正为普通依赖：
+          #
+          #   luci-app-qmodem-next
+          #
+          # QModem feed 本身不删除。
+          # ====================================================
+
+          QMODEM_NEXT_MK="./feeds/qmodem/luci/luci-app-qmodem-next/Makefile"
+
+
+          if [ -f "$QMODEM_NEXT_MK" ]; then
+
+            echo
+            echo "========== QModem Next 依赖检查 =========="
+            echo
+
+
+            if grep -qE \
+              '^[[:space:]]*DEPENDS:=[[:space:]]*\+luci-app-qmodem-next[[:space:]]*$' \
+              "$QMODEM_NEXT_MK"; then
+
+
+              sed -i -E \
+                's|^([[:space:]]*)DEPENDS:=[[:space:]]*\+luci-app-qmodem-next[[:space:]]*$|\1DEPENDS:=luci-app-qmodem-next|' \
+                "$QMODEM_NEXT_MK"
+
+
+              echo "[OK] 已修复 QModem Next 中文包强制依赖"
+              echo
+              echo "原：DEPENDS:=+luci-app-qmodem-next"
+              echo "新：DEPENDS:=luci-app-qmodem-next"
+
+
+            else
+
+              echo "[OK] QModem Next 中文包不存在强制依赖，无需修复"
+
+            fi
+
+
+            echo
+            echo "当前相关配置："
+
+            grep -E \
+              'DEFAULT:=.*LUCI_LANG_zh_Hans|DEPENDS:=.*luci-app-qmodem-next' \
+              "$QMODEM_NEXT_MK" \
+              || true
+
+
+            echo
+            echo "=========================================="
+            echo
+
+          else
+
+            echo "::warning::未找到 QModem Next Makefile：$QMODEM_NEXT_MK"
+
+          fi
 
 
           # ====================================================
@@ -399,6 +532,7 @@ jobs:
             ./feeds/packages/lang/golang
 
 
+          echo
           echo "===== golang version ====="
 
           grep -E \
@@ -406,9 +540,13 @@ jobs:
             ./feeds/packages/lang/golang/golang/Makefile
 
           echo "=========================="
+          echo
 
 
+          # ----------------------------------------------------
           # 清理断链
+          # ----------------------------------------------------
+
           find ./package/feeds/ \
             -xtype l \
             -exec rm -f {} + \
@@ -494,24 +632,223 @@ jobs:
 
       # ========================================================
       # 应用配置
+      #
+      # make defconfig 后必须检查最终配置，
+      # 防止依赖关系再次偷偷拉入完整 QModem。
       # ========================================================
 
       - name: Custom Settings
 
+        shell: bash
+
         run: |
+
+          set -euo pipefail
+
 
           cd ./wrt/
 
+
+          # ----------------------------------------------------
+          # 导入 H5000M 配置
+          # ----------------------------------------------------
 
           cat \
             "$GITHUB_WORKSPACE/Config/$WRT_CONFIG.txt" \
             >> .config
 
 
+          # ----------------------------------------------------
+          # 执行通用 Settings
+          # ----------------------------------------------------
+
           "$GITHUB_WORKSPACE/Scripts/Settings.sh"
 
 
+          # ----------------------------------------------------
+          # 计算最终依赖
+          # ----------------------------------------------------
+
           make defconfig -j"$(nproc)"
+
+
+          # ====================================================
+          # H5000M 5G 模组配置检查
+          # ====================================================
+
+          echo
+          echo "=================================================="
+          echo "H5000M 5G 模组最终 .config 检查"
+          echo "=================================================="
+          echo
+
+
+          echo "允许并且必须存在的组件："
+          echo
+
+
+          grep -E \
+            '^CONFIG_PACKAGE_(luci-app-mt5700m|luci-i18n-mt5700m-zh-cn|ubus-at-daemon|sms-tool_q)=[ym]$' \
+            .config \
+            || true
+
+
+          echo
+          echo "完整 QModem 相关组件："
+          echo
+
+
+          grep -E \
+            '^CONFIG_PACKAGE_(luci-app-qmodem|luci-app-qmodem-next|luci-i18n-qmodem-next-zh-cn|qmodem|modem_scan|qmodem-settings|qmodem-smsd|sms-forwarder-next|tom_modem|qmodem-seal)=[ym]$' \
+            .config \
+            || true
+
+
+          echo
+          echo "=================================================="
+          echo
+
+
+          # ----------------------------------------------------
+          # 必须编入固件的 MT5700M 组件
+          # ----------------------------------------------------
+
+          REQUIRED_PACKAGES="
+          luci-app-mt5700m
+          ubus-at-daemon
+          sms-tool_q
+          "
+
+
+          REQUIRED_ERROR=0
+
+
+          for PKG in $REQUIRED_PACKAGES; do
+
+            if ! grep -q \
+              "^CONFIG_PACKAGE_${PKG}=y$" \
+              .config; then
+
+
+              echo "::error::H5000M 必需组件没有编入固件：$PKG"
+
+              REQUIRED_ERROR=1
+
+            else
+
+              echo "[OK] 必需组件：$PKG"
+
+            fi
+
+          done
+
+
+          if [ "$REQUIRED_ERROR" -ne 0 ]; then
+
+            echo
+            echo "::error::MT5700M 必需组件检查失败。"
+            echo
+
+            exit 1
+
+          fi
+
+
+          # ----------------------------------------------------
+          # 完整 QModem 禁止进入编译
+          #
+          # y：编入固件
+          # m：作为软件包编译
+          #
+          # 本项目两种都不需要。
+          # ----------------------------------------------------
+
+          FORBIDDEN_PACKAGES="
+          luci-app-qmodem
+          luci-app-qmodem-next
+          luci-i18n-qmodem-next-zh-cn
+          qmodem
+          modem_scan
+          qmodem-settings
+          qmodem-smsd
+          sms-forwarder-next
+          tom_modem
+          qmodem-seal
+          "
+
+
+          QMODEM_ERROR=0
+
+
+          for PKG in $FORBIDDEN_PACKAGES; do
+
+            if grep -Eq \
+              "^CONFIG_PACKAGE_${PKG}=[ym]$" \
+              .config; then
+
+
+              VALUE="$(
+                grep \
+                  "^CONFIG_PACKAGE_${PKG}=" \
+                  .config \
+                  | tail -n 1
+              )"
+
+
+              echo "::error::发现不应该被选择的 QModem 组件：$VALUE"
+
+              QMODEM_ERROR=1
+
+            fi
+
+          done
+
+
+          if [ "$QMODEM_ERROR" -ne 0 ]; then
+
+            echo
+            echo "=================================================="
+            echo "::error::完整 QModem 被依赖关系自动选中！"
+            echo
+            echo "H5000M 的设计是："
+            echo
+            echo "  QModem feed           = 保留"
+            echo "  ubus-at-daemon        = 编译"
+            echo "  sms-tool_q            = 编译"
+            echo "  luci-app-mt5700m      = 编译"
+            echo
+            echo "  qmodem                = 禁止"
+            echo "  modem_scan            = 禁止"
+            echo "  luci-app-qmodem-next  = 禁止"
+            echo
+            echo "停止编译，避免重新生成 USB / USBv6。"
+            echo "=================================================="
+            echo
+
+            exit 1
+
+          fi
+
+
+          echo
+          echo "=================================================="
+          echo "[OK] H5000M 5G 配置检查通过"
+          echo
+          echo "QModem feed           = 保留"
+          echo "ubus-at-daemon        = YES"
+          echo "sms-tool_q            = YES"
+          echo "luci-app-mt5700m      = YES"
+          echo
+          echo "qmodem                = NO"
+          echo "modem_scan            = NO"
+          echo "luci-app-qmodem-next  = NO"
+          echo "=================================================="
+          echo
+
+
+          # ----------------------------------------------------
+          # 清理编译目录
+          # ----------------------------------------------------
 
           make clean -j"$(nproc)"
 
@@ -633,6 +970,115 @@ jobs:
 
 
             # ==================================================
+            # 最终固件 Manifest 检查
+            #
+            # 这里检查真正进入 H5000M 固件的包，
+            # 防止 .config 检查以后还有意外变化。
+            # ==================================================
+
+            echo
+            echo "=================================================="
+            echo "H5000M 最终 Manifest 5G 组件检查"
+            echo "=================================================="
+            echo
+
+
+            MANIFEST_FILES="$(find ./bin/targets/ -type f -name '*.manifest' -print)"
+
+
+            if [ -z "$MANIFEST_FILES" ]; then
+
+              echo "::error::没有找到固件 manifest 文件！"
+
+              exit 1
+
+            fi
+
+
+            echo "MT5700M 必需组件："
+            echo
+
+
+            for PKG in \
+              luci-app-mt5700m \
+              ubus-at-daemon \
+              sms-tool_q; do
+
+
+              if grep -qh \
+                "^${PKG} - " \
+                $MANIFEST_FILES; then
+
+                echo "[OK] $PKG"
+
+              else
+
+                echo "::error::最终固件缺少必需组件：$PKG"
+
+                exit 1
+
+              fi
+
+            done
+
+
+            echo
+            echo "检查禁止进入固件的完整 QModem："
+            echo
+
+
+            MANIFEST_QMODEM_ERROR=0
+
+
+            for PKG in \
+              luci-app-qmodem \
+              luci-app-qmodem-next \
+              luci-i18n-qmodem-next-zh-cn \
+              qmodem \
+              modem_scan \
+              qmodem-settings \
+              qmodem-smsd \
+              sms-forwarder-next \
+              tom_modem \
+              qmodem-seal; do
+
+
+              if grep -qh \
+                "^${PKG} - " \
+                $MANIFEST_FILES; then
+
+                echo "::error::最终固件中发现禁止组件：$PKG"
+
+                MANIFEST_QMODEM_ERROR=1
+
+              fi
+
+            done
+
+
+            if [ "$MANIFEST_QMODEM_ERROR" -ne 0 ]; then
+
+              echo
+              echo "=================================================="
+              echo "::error::完整 QModem 已进入最终固件！"
+              echo "::error::停止打包和创建 Release。"
+              echo "=================================================="
+              echo
+
+              exit 1
+
+            fi
+
+
+            echo
+            echo "[OK] 最终固件中没有完整 QModem"
+            echo "[OK] 不会由 QModem 创建 USB / USBv6"
+            echo
+            echo "=================================================="
+            echo
+
+
+            # ==================================================
             # 内核版本
             # ==================================================
 
@@ -694,7 +1140,10 @@ jobs:
             echo "=================================="
 
 
+            # --------------------------------------------------
             # 删除不需要发布的文件
+            # --------------------------------------------------
+
             find ./bin/targets/ \
               -iregex \
               ".*\(buildinfo\|json\|sha256sums\|packages\)$" \
@@ -745,7 +1194,10 @@ jobs:
             )
 
 
+            # --------------------------------------------------
             # 剩余文件移动到 upload
+            # --------------------------------------------------
+
             find ./bin/targets/ \
               -type f \
               -exec mv -f {} ./upload/ \;
@@ -954,7 +1406,10 @@ jobs:
           echo
 
 
+          # ----------------------------------------------------
           # 读取 GitHub 上真实存在的 Release
+          # ----------------------------------------------------
+
           gh release view "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --json tagName,isDraft,isPrerelease,assets \
