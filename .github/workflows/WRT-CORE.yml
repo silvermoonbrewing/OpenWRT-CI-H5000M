@@ -9,19 +9,16 @@
 # - OpenClash
 # - PassWall
 # - ShadowSocksR Plus+
-# - QModem feed
-#   仅用于提供：
-#     ubus-at-daemon
-#     sms-tool_q
-# - MT5700M 专用管理器
+# - MT5700M 专用管理器（FAN789/luci-app-mt5700m 3.x）
+#   自带 mt5700m-transport 负责串口 / TCP AT / 短信，
+#   不再依赖 QModem feed、ubus-at-daemon、sms-tool_q
 # - H5000M 专用配置
 # - 原有 Release 二次验证
 #
 # H5000M 5G 管理原则：
 #
 #   luci-app-mt5700m      = 编译
-#   ubus-at-daemon        = 编译
-#   sms-tool_q            = 编译
+#   mt5700m-transport     = 编译（由 luci-app-mt5700m 依赖自动选中）
 #
 #   qmodem                = 禁止
 #   modem_scan            = 禁止
@@ -42,10 +39,9 @@
 # 2. sysupgrade.bin 必须大于 1MB
 # 3. TEST=true 不创建 Release
 # 4. Release 创建以后再次检查真实附件
-# 5. 修复 QModem Next 中文包反向拉入主程序
-# 6. defconfig 后检查完整 QModem 不得被选中
-# 7. 最终 manifest 再次检查完整 QModem 不得进入固件
-# 8. TEST=true 时上传最终 Config 为 Actions Artifact
+# 5. defconfig 后检查完整 QModem 不得被选中（防御性检查）
+# 6. 最终 manifest 再次检查完整 QModem 不得进入固件
+# 7. TEST=true 时上传最终 Config 为 Actions Artifact
 # ============================================================
 
 name: WRT-CORE
@@ -340,18 +336,12 @@ jobs:
       #
       # helloworld
       # openclash
-      # qmodem
       # mt5700m
       #
       # 注意：
       #
-      # QModem feed 必须保留，
-      # 因为 luci-app-mt5700m 依赖：
-      #
-      #   ubus-at-daemon
-      #   sms-tool_q
-      #
-      # 但是禁止完整 qmodem 进入固件。
+      # luci-app-mt5700m 3.x 已改用自带的 mt5700m-transport，
+      # 不再需要 QModem feed，因此不再引入。
       # ========================================================
 
       - name: Update Feeds
@@ -376,7 +366,6 @@ jobs:
           src-git helloworld https://github.com/fw876/helloworld.git
           src-git openclash https://github.com/vernesong/OpenClash.git
           src-git istore https://github.com/linkease/istore;main
-          src-git qmodem https://github.com/FUjr/QModem.git;main
           src-git mt5700m https://github.com/FAN789/luci-app-mt5700m.git;main
           EOF
 
@@ -432,87 +421,6 @@ jobs:
           # install -a 不代表全部编入固件，
           # 最终是否编入由 .config 决定。
           ./scripts/feeds install -a
-
-
-          # ====================================================
-          # 修复 QModem Next 中文包依赖
-          #
-          # QModem 上游 Makefile 中存在：
-          #
-          #   DEFAULT:=LUCI_LANG_zh_Hans||(ALL&&m)
-          #   DEPENDS:=+luci-app-qmodem-next
-          #
-          # 当 CONFIG_LUCI_LANG_zh_Hans=y 时，
-          # "+" 可能反向选中 luci-app-qmodem-next，
-          # 进一步拉入完整 qmodem。
-          #
-          # H5000M 只需要 QModem feed 中的：
-          #
-          #   ubus-at-daemon
-          #   sms-tool_q
-          #
-          # 所以把强制依赖：
-          #
-          #   +luci-app-qmodem-next
-          #
-          # 修正为普通依赖：
-          #
-          #   luci-app-qmodem-next
-          #
-          # QModem feed 本身不删除。
-          # ====================================================
-
-          QMODEM_NEXT_MK="./feeds/qmodem/luci/luci-app-qmodem-next/Makefile"
-
-
-          if [ -f "$QMODEM_NEXT_MK" ]; then
-
-            echo
-            echo "========== QModem Next 依赖检查 =========="
-            echo
-
-
-            if grep -qE \
-              '^[[:space:]]*DEPENDS:=[[:space:]]*\+luci-app-qmodem-next[[:space:]]*$' \
-              "$QMODEM_NEXT_MK"; then
-
-
-              sed -i -E \
-                's|^([[:space:]]*)DEPENDS:=[[:space:]]*\+luci-app-qmodem-next[[:space:]]*$|\1DEPENDS:=luci-app-qmodem-next|' \
-                "$QMODEM_NEXT_MK"
-
-
-              echo "[OK] 已修复 QModem Next 中文包强制依赖"
-              echo
-              echo "原：DEPENDS:=+luci-app-qmodem-next"
-              echo "新：DEPENDS:=luci-app-qmodem-next"
-
-
-            else
-
-              echo "[OK] QModem Next 中文包不存在强制依赖，无需修复"
-
-            fi
-
-
-            echo
-            echo "当前相关配置："
-
-            grep -E \
-              'DEFAULT:=.*LUCI_LANG_zh_Hans|DEPENDS:=.*luci-app-qmodem-next' \
-              "$QMODEM_NEXT_MK" \
-              || true
-
-
-            echo
-            echo "=========================================="
-            echo
-
-          else
-
-            echo "::warning::未找到 QModem Next Makefile：$QMODEM_NEXT_MK"
-
-          fi
 
 
           # ====================================================
@@ -635,7 +543,7 @@ jobs:
       # 应用配置
       #
       # make defconfig 后必须检查最终配置，
-      # 防止依赖关系再次偷偷拉入完整 QModem。
+      # 确认 MT5700M 组件已选中，完整 QModem 未被选中。
       # ========================================================
 
       - name: Custom Settings
@@ -689,7 +597,7 @@ jobs:
 
 
           grep -E \
-            '^CONFIG_PACKAGE_(luci-app-mt5700m|luci-i18n-mt5700m-zh-cn|ubus-at-daemon|sms-tool_q)=[ym]$' \
+            '^CONFIG_PACKAGE_(luci-app-mt5700m|luci-i18n-mt5700m-zh-cn|mt5700m-transport|flock|curl)=[ym]$' \
             .config \
             || true
 
@@ -714,10 +622,12 @@ jobs:
           # 必须编入固件的 MT5700M 组件
           # ----------------------------------------------------
 
+          # curl：插件 health.sh 探测依赖，但插件 Makefile 未声明
           REQUIRED_PACKAGES="
           luci-app-mt5700m
-          ubus-at-daemon
-          sms-tool_q
+          mt5700m-transport
+          flock
+          curl
           "
 
 
@@ -813,10 +723,8 @@ jobs:
             echo
             echo "H5000M 的设计是："
             echo
-            echo "  QModem feed           = 保留"
-            echo "  ubus-at-daemon        = 编译"
-            echo "  sms-tool_q            = 编译"
             echo "  luci-app-mt5700m      = 编译"
+            echo "  mt5700m-transport     = 编译"
             echo
             echo "  qmodem                = 禁止"
             echo "  modem_scan            = 禁止"
@@ -835,10 +743,9 @@ jobs:
           echo "=================================================="
           echo "[OK] H5000M 5G 配置检查通过"
           echo
-          echo "QModem feed           = 保留"
-          echo "ubus-at-daemon        = YES"
-          echo "sms-tool_q            = YES"
           echo "luci-app-mt5700m      = YES"
+          echo "mt5700m-transport     = YES"
+          echo "flock / curl          = YES"
           echo
           echo "qmodem                = NO"
           echo "modem_scan            = NO"
@@ -1004,8 +911,9 @@ jobs:
 
             for PKG in \
               luci-app-mt5700m \
-              ubus-at-daemon \
-              sms-tool_q; do
+              mt5700m-transport \
+              flock \
+              curl; do
 
 
               if grep -qh \
