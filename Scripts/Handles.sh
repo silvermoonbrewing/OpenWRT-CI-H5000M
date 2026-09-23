@@ -234,3 +234,29 @@ if [ -f "$RUST_FILE" ]; then
 		echo "rust fix failed; continuing!"
 	fi
 fi
+
+#---------- 修正 MT5700M 页面大标题在 Argon 主题下不显示 ----------
+# 插件的蓝色卡片大标题是 <h2>，只设置了白色文字、没有设置背景；
+# Argon 主题给所有 h2 加白色背景块，结果白字白底看不见。
+# 给两处标题样式补上"无背景/无阴影/无边框/无内边距"：
+#   status.js    .mt5700m-title   → 概览页
+#   controls.js  .mt-ui-hero h2   → 移动数据/无线与小区/短信/模组与SIM卡/高级/AT终端
+MT5700M_JS="$PKG_PATH/../feeds/mt5700m/luci-app-mt5700m/htdocs/luci-static/resources"
+MT5700M_NOBG='background:none!important;box-shadow:none!important;border:0!important;padding:0!important;'
+for MT5700M_FIX in \
+	"view/mt5700m/status.js|.mt5700m-title{" \
+	"mt5700m/controls.js|.mt-ui-hero h2{"; do
+	MT5700M_FILE="$MT5700M_JS/${MT5700M_FIX%%|*}"
+	MT5700M_SEL="${MT5700M_FIX#*|}"
+	[ -f "$MT5700M_FILE" ] || continue
+	echo " "
+	if grep -qF "${MT5700M_SEL}background:none" "$MT5700M_FILE"; then
+		echo "mt5700m title css already fixed: ${MT5700M_FIX%%|*}"
+	elif grep -qF "${MT5700M_SEL}margin:0 0 6px;" "$MT5700M_FILE"; then
+		MT5700M_SEL_RE="$(printf '%s' "$MT5700M_SEL" | sed 's/[.[\*^$/]/\\&/g')"
+		sed -i "s/${MT5700M_SEL_RE}margin:0 0 6px;/${MT5700M_SEL_RE}${MT5700M_NOBG}margin:0 0 6px;/" "$MT5700M_FILE"
+		echo "mt5700m title css has been fixed: ${MT5700M_FIX%%|*}"
+	else
+		echo "mt5700m title css fix skipped (upstream changed): ${MT5700M_FIX%%|*}"
+	fi
+done
