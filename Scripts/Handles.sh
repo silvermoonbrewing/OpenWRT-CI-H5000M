@@ -262,27 +262,37 @@ for MT5700M_FIX in \
 done
 
 #---------- 修正 MT5700M 健康检查探测方式 ----------
-# 原版 health_probe 只用 curl --interface eth2 访问百度/QQ。
-# OpenClash TUN 模式会给本机 TCP 打 fwmark 送进 utun，
+# 原版 health_probe 用 curl --interface eth2 访问百度/QQ 验证互联网。
+# OpenClash 开启"路由本机代理"(TUN) 时，本机 TCP 会被打 fwmark 送进 utun，
 # 而 curl 绑定了 eth2（SO_BINDTODEVICE），回包从 utun 回来被内核丢弃 → 超时 000，
 # 插件误判断网，每小时自动重建 3 次数据会话（每次断网数秒、换 IP）。
-# ICMP 不被 OpenClash 接管，改为先 ping -I 探测，不通再退回原来的 curl。
+#
+# OpenClash 为避免内核自身流量回环，在本机代理链最前面放行 GID 65534：
+#   openclash_output / openclash_mangle_output:  skgid == 65534 return
+# 其内核即以 root:nogroup(65534) 运行。这里让探测 curl 同样以 root:nogroup 运行，
+# 从而绕过 OpenClash，真正从 eth2 出去，保留原作者的 HTTPS 实际互联网验证。
+# 用 start-stop-daemon 切换组；-p 指定独立 pidfile，避免与其他 curl 进程互相判定"已在运行"。
 MT5700M_HEALTH="$PKG_PATH/../feeds/mt5700m/luci-app-mt5700m/root/usr/share/mt5700m/health.sh"
 if [ -f "$MT5700M_HEALTH" ] && grep -q '^health_probe() {$' "$MT5700M_HEALTH"; then
 	echo " "
 
 	MT5700M_PROBE_NEW="$(mktemp)"
 	cat > "$MT5700M_PROBE_NEW" <<-'PROBE'
+	health_curl() {
+	    local bin
+	    bin="$(command -v curl)" || return 127
+	    # 以 root:nogroup(GID 65534) 运行，命中 OpenClash 的 skgid 65534 放行规则
+	    if command -v start-stop-daemon >/dev/null 2>&1 && grep -q '^nogroup:' /etc/group 2>/dev/null; then
+	        start-stop-daemon -S -c root:nogroup -p "${STATE_DIR:-/var/run/mt5700m}/probe-curl.pid" -x "$bin" -- "$@"
+	    else
+	        "$bin" "$@"
+	    fi
+	}
 	health_probe() {
 	    local target code
-	    # ICMP：不受透明代理（OpenClash TUN / tproxy）接管影响
-	    for target in 223.5.5.5 119.29.29.29; do
-	        ping -I "$1" -c 1 -W 2 "$target" >/dev/null 2>&1 && return 0
-	    done
-	    # HTTP：原版逻辑，运营商屏蔽 ICMP 时兜底
-	    command -v curl >/dev/null 2>&1 || return 1
+	    command -v curl >/dev/null 2>&1 || return 2
 	    for target in https://www.baidu.com https://www.qq.com; do
-	        code="$(curl --interface "$1" --connect-timeout 2 --max-time 2 -s -o /dev/null -w '%{http_code}' "$target" 2>/dev/null)" || continue
+	        code="$(health_curl --interface "$1" --connect-timeout 2 --max-time 2 -s -o /dev/null -w '%{http_code}' "$target" 2>/dev/null)" || continue
 	        case "$code" in [1-5][0-9][0-9]) return 0;; esac
 	    done
 	    return 1
@@ -291,7 +301,7 @@ if [ -f "$MT5700M_HEALTH" ] && grep -q '^health_probe() {$' "$MT5700M_HEALTH"; t
 
 	# 删除原 health_probe（从函数头到第一个行首 "}"），在原位置插入新函数
 	if sed -i -e "/^health_probe() {\$/{r $MT5700M_PROBE_NEW" -e ':a;N;/\n}$/!ba;d}' "$MT5700M_HEALTH" \
-		&& grep -q 'ping -I "$1"' "$MT5700M_HEALTH" && sh -n "$MT5700M_HEALTH"; then
+		&& grep -q 'root:nogroup' "$MT5700M_HEALTH" && sh -n "$MT5700M_HEALTH"; then
 		echo "mt5700m health probe has been fixed!"
 	else
 		echo "mt5700m health probe fix failed; continuing!"
