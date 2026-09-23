@@ -194,12 +194,10 @@ CONFIG_PACKAGE_shadowsocksr-libev-ssr-redir=y
 CONFIG_PACKAGE_shadowsocksr-libev-ssr-server=y
 CONFIG_PACKAGE_simple-obfs-client=y
 CONFIG_PACKAGE_sing-box=y
-CONFIG_PACKAGE_sms-tool_q=y
 CONFIG_PACKAGE_tar=y
 CONFIG_PACKAGE_taskd=y
 CONFIG_PACKAGE_tcping=y
 CONFIG_PACKAGE_terminfo=y
-CONFIG_PACKAGE_ubus-at-daemon=y
 CONFIG_PACKAGE_ucode-mod-lua=y
 CONFIG_PACKAGE_unzip=y
 CONFIG_PACKAGE_v2dat=y
@@ -224,34 +222,12 @@ CONFIG_PACKAGE_luci-theme-bootstrap=y
 #==============================================================
 # H5000M 5G 模组管理
 #
-# H5000M 使用专用 luci-app-mt5700m。
+# H5000M 使用专用 luci-app-mt5700m（3.x）。
 #
-# QModem feed 仅提供：
-#
-#   ubus-at-daemon
-#   sms-tool_q
-#
-# 禁止完整 QModem 管理器进入固件，
-# 避免 QModem 创建 USB / USBv6，
-# 与 MT5700M / MT5700Mv6 重复管理 eth2。
+# 3.x 自带 mt5700m-transport 负责串口 / TCP AT / 短信，
+# 已不再依赖 QModem、ubus-at-daemon、sms-tool_q，
+# WRT-CORE.yml 也不再引入 QModem feed。
 #==============================================================
 
 CONFIG_PACKAGE_luci-app-mt5700m=y
 CONFIG_PACKAGE_luci-i18n-mt5700m-zh-cn=y
-
-CONFIG_PACKAGE_ubus-at-daemon=y
-CONFIG_PACKAGE_sms-tool_q=y
-
-# CONFIG_PACKAGE_luci-app-qmodem is not set
-# CONFIG_PACKAGE_luci-app-qmodem-next is not set
-# CONFIG_PACKAGE_luci-i18n-qmodem-next-zh-cn is not set
-
-# CONFIG_PACKAGE_qmodem is not set
-# CONFIG_PACKAGE_modem_scan is not set
-
-# CONFIG_PACKAGE_qmodem-settings is not set
-# CONFIG_PACKAGE_qmodem-smsd is not set
-# CONFIG_PACKAGE_sms-forwarder-next is not set
-# CONFIG_PACKAGE_tom_modem is not set
-# CONFIG_PACKAGE_qmodem-seal is not set
-
