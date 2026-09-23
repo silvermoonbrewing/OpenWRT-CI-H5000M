@@ -63,9 +63,11 @@ config_load wireless
 config_foreach set_radio wifi-device
 config_foreach set_iface wifi-iface
 uci -q commit wireless
-#---------- MT5700M 数据面看门狗 ----------
-chmod 755 /usr/bin/mt5700m-watchdog 2>/dev/null
-chmod 755 /etc/init.d/mt5700m-watchdog 2>/dev/null
-/etc/init.d/mt5700m-watchdog enable
-/etc/init.d/mt5700m-watchdog start
+
+#---------- MT5700M 数据面健康检查 ----------
+# 已改用 luci-app-mt5700m 3.x 自带的 health.sh（manager monitor 每 60s 探测），
+# 不再使用自建 mt5700m-watchdog，避免两套恢复逻辑同时动链路。
+# 注意：health.sh 依赖 curl，但插件 Makefile 未声明，
+#       Config/H5000M.txt 中 CONFIG_PACKAGE_curl=y 必须保留。
+
 exit 0
