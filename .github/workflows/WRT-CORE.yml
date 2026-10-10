@@ -8,7 +8,6 @@
 #
 # - OpenClash
 # - PassWall
-# - ShadowSocksR Plus+
 # - MT5700M 专用管理器（FAN789/luci-app-mt5700m 3.x）
 #   自带 mt5700m-transport 负责串口 / TCP AT / 短信，
 #   不再依赖 QModem feed、ubus-at-daemon、sms-tool_q
@@ -334,7 +333,6 @@ jobs:
       #
       # 保留 H5000M 原有专用 feeds：
       #
-      # helloworld
       # openclash
       # mt5700m
       #
@@ -363,7 +361,6 @@ jobs:
           src-git mosdns https://github.com/sbwml/luci-app-mosdns.git;v5
           src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main
           src-git passwall https://github.com/Openwrt-Passwall/openwrt-passwall.git;main
-          src-git helloworld https://github.com/fw876/helloworld.git
           src-git openclash https://github.com/vernesong/OpenClash.git
           src-git istore https://github.com/linkease/istore;main
           src-git mt5700m https://github.com/FAN789/luci-app-mt5700m.git;main
@@ -410,12 +407,6 @@ jobs:
           rm -rf ./feeds/packages/net/hysteria
 
           rm -rf ./feeds/packages/net/naiveproxy
-
-
-          # helloworld 的 mihomo 打包时调用 $(STAGING_DIR_HOST)/bin/upx
-          # packages 自带的 upx 走 cmake，host 版装到 staging_dir/hostpkg，路径对不上 → Error 127
-          # 删掉它，让 helloworld 自带的 upx（装到 staging_dir/host/bin）生效
-          rm -rf ./feeds/packages/utils/upx
 
 
           # 删除以后重新建立索引

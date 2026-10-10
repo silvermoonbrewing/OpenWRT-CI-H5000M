@@ -58,13 +58,13 @@ jobs:
       WRT_NAME: Hiveton_H5000M
 
       #默认 WIFI 名称
-      WRT_SSID: Hiveton
+      WRT_SSID: Hiveton-H5000M
 
       #默认 WIFI 密码
       WRT_WORD: ljx2026@.
 
       #默认地址
-      WRT_IP: 192.168.99.1
+      WRT_IP: 192.168.88.1
 
       #默认密码
       WRT_PW: admin
