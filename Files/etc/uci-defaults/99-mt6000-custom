@@ -47,14 +47,15 @@ set_iface() {
 
 	band=$(uci -q get wireless.$device.band)
 	case "$band" in
-		2g) ssid='Hiveton-2G' ;;
-		5g) ssid='Hiveton-5G' ;;
-		6g) ssid='Hiveton-6G' ;;
-		*)  ssid='Hiveton' ;;
+		2g) ssid='Hiveton-H5000M-2.4G' ;;
+		5g) ssid='Hiveton-H5000M-5G' ;;
+		6g) ssid='Hiveton-H5000M-6G' ;;
+		*)  ssid='Hiveton-H5000M' ;;
 	esac
 
 	uci -q set wireless.$iface.ssid="$ssid"
-	uci -q set wireless.$iface.encryption='psk2+ccmp'
+	# WPA2-PSK，算法自动（LuCI 显示"自动"）
+	uci -q set wireless.$iface.encryption='psk2'
 	uci -q set wireless.$iface.key="$WIFI_KEY"
 	uci -q delete wireless.$iface.disabled
 }
