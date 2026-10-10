@@ -311,9 +311,9 @@ else
 fi
 
 # ---- Geo 数据：每次编译抓上游最新 ----
-# 路径与 SSR+ / PassWall / OpenClash 官方脚本一致
+# 路径与 PassWall 官方脚本一致（SSR+ 已移除，不再写 /usr/share/shadowsocksr）
 GEO_TMP="$(mktemp -d)"
-mkdir -p "$OC_FILES/usr/share/v2ray" "$OC_FILES/usr/share/shadowsocksr"
+mkdir -p "$OC_FILES/usr/share/v2ray"
 
 geo_fetch() {
 	local name="$1" url="$2" dest="$3"
@@ -334,10 +334,6 @@ geo_fetch "geoip.dat" \
 geo_fetch "geosite.dat" \
 	"https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat" \
 	"$OC_FILES/usr/share/v2ray/geosite.dat"
-
-geo_fetch "Country.mmdb" \
-	"https://github.com/alecthw/mmdb_china_ip_list/releases/latest/download/Country-lite.mmdb" \
-	"$OC_FILES/usr/share/shadowsocksr/Country.mmdb"
 
 rm -rf "$GEO_TMP"
 
