@@ -50,7 +50,9 @@ UPDATE_PACKAGE() {
 # 否则会和 feeds 里的同名包冲突
 #===============================================
 UPDATE_PACKAGE "argon" "jerrykuku/luci-theme-argon" "master"
-UPDATE_PACKAGE "argon-config" "jerrykuku/luci-app-argon-config" "master"
+# Argon 3.0.0 起主题已内置配置页（含 /etc/config/argon 与 argon-config 翻译），
+# 独立的 luci-app-argon-config 会与之文件冲突导致打包失败，故不再拉取
+# UPDATE_PACKAGE "argon-config" "jerrykuku/luci-app-argon-config" "master"
 
 #H5000M 专属插件（平级结构，只能 clone 到 package/）
 UPDATE_PACKAGE "h5000m-fancontrol" "FAN789/luci-app-h5000m-fancontrol" "main"
