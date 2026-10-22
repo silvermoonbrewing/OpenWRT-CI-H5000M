@@ -8,29 +8,22 @@
 #
 # - OpenClash
 # - PassWall
-# - MT5700M 专用管理器（FAN789/luci-app-mt5700m 3.x）
-#   自带 mt5700m-transport 负责串口 / TCP AT / 短信，
-#   不再依赖 QModem feed、ubus-at-daemon、sms-tool_q
+# - QModem 5G 模组管理（FUjr/QModem，界面 luci-app-qmodem-next）
+#   鼎桥 MT5700M（USB ID 3466:3301，ECM/NCM）在 QModem 支持列表内，
+#   QModem 自带 hiveton,h5000m 板级预设（slot 2-1，接口 USB / USBv6）
 # - H5000M 专用配置
 # - 原有 Release 二次验证
 #
 # H5000M 5G 管理原则：
 #
-#   luci-app-mt5700m      = 编译
-#   mt5700m-transport     = 编译（由 luci-app-mt5700m 依赖自动选中）
+#   qmodem                = 编译
+#   luci-app-qmodem-next  = 编译（新版 JS 界面）
 #
-#   qmodem                = 禁止
-#   modem_scan            = 禁止
-#   luci-app-qmodem       = 禁止
-#   luci-app-qmodem-next  = 禁止
+#   luci-app-qmodem       = 禁止（旧版界面，与 next 互斥）
+#   luci-app-mt5700m      = 禁止（已弃用）
+#   mt5700m-transport     = 禁止（已弃用）
 #
-# 避免 QModem 与 MT5700M manager
-# 同时管理 eth2，重复生成：
-#
-#   MT5700M
-#   MT5700Mv6
-#   USB
-#   USBv6
+# 只保留 QModem 一套管理器，避免两套程序同时管理 eth2。
 #
 # 增强：
 #
@@ -38,8 +31,8 @@
 # 2. sysupgrade.bin 必须大于 1MB
 # 3. TEST=true 不创建 Release
 # 4. Release 创建以后再次检查真实附件
-# 5. defconfig 后检查完整 QModem 不得被选中（防御性检查）
-# 6. 最终 manifest 再次检查完整 QModem 不得进入固件
+# 5. defconfig 后检查 QModem 必需组件已选中、旧管理器未选中
+# 6. 最终 manifest 再次检查
 # 7. TEST=true 时上传最终 Config 为 Actions Artifact
 # ============================================================
 
@@ -331,15 +324,15 @@ jobs:
       # ========================================================
       # Feeds
       #
-      # 保留 H5000M 原有专用 feeds：
+      # H5000M 专用 feeds：
       #
       # openclash
-      # mt5700m
+      # qmodem（FUjr/QModem，5G 模组拨号管理）
       #
       # 注意：
       #
-      # luci-app-mt5700m 3.x 已改用自带的 mt5700m-transport，
-      # 不再需要 QModem feed，因此不再引入。
+      # 已弃用 FAN789/luci-app-mt5700m，改由 QModem 管理 MT5700M，
+      # 不再引入 mt5700m feed。
       # ========================================================
 
       - name: Update Feeds
@@ -363,7 +356,7 @@ jobs:
           src-git passwall https://github.com/Openwrt-Passwall/openwrt-passwall.git;main
           src-git openclash https://github.com/vernesong/OpenClash.git
           src-git istore https://github.com/linkease/istore;main
-          src-git mt5700m https://github.com/FAN789/luci-app-mt5700m.git;main
+          src-git qmodem https://github.com/FUjr/QModem.git;main
           EOF
 
 
@@ -540,7 +533,7 @@ jobs:
       # 应用配置
       #
       # make defconfig 后必须检查最终配置，
-      # 确认 MT5700M 组件已选中，完整 QModem 未被选中。
+      # 确认 QModem 组件已选中，旧版界面与 MT5700M 插件未被选中。
       # ========================================================
 
       - name: Custom Settings
@@ -579,7 +572,7 @@ jobs:
 
 
           # ====================================================
-          # H5000M 5G 模组配置检查
+          # H5000M 5G 模组配置检查（QModem）
           # ====================================================
 
           echo
@@ -588,55 +581,34 @@ jobs:
           echo "=================================================="
           echo
 
-
-          echo "允许并且必须存在的组件："
-          echo
-
-
           grep -E \
-            '^CONFIG_PACKAGE_(luci-app-mt5700m|luci-i18n-mt5700m-zh-cn|mt5700m-transport|flock|curl)=[ym]$' \
+            '^CONFIG_PACKAGE_(qmodem|luci-app-qmodem-next|luci-i18n-qmodem-next-zh-cn|modem_scan|ubus-at-daemon|kmod-usb-net-cdc-ether|kmod-usb-net-cdc-ncm|luci-app-qmodem|luci-app-mt5700m|mt5700m-transport)=[ym]$' \
             .config \
             || true
 
-
-          echo
-          echo "完整 QModem 相关组件："
-          echo
-
-
-          grep -E \
-            '^CONFIG_PACKAGE_(luci-app-qmodem|luci-app-qmodem-next|luci-i18n-qmodem-next-zh-cn|qmodem|modem_scan|qmodem-settings|qmodem-smsd|sms-forwarder-next|tom_modem|qmodem-seal)=[ym]$' \
-            .config \
-            || true
-
-
-          echo
-          echo "=================================================="
           echo
 
 
           # ----------------------------------------------------
-          # 必须编入固件的 MT5700M 组件
+          # 必须编入固件的 QModem 组件
+          # MT5700M 走 ECM / NCM，对应 cdc-ether / cdc-ncm 驱动
           # ----------------------------------------------------
 
-          # curl：插件 health.sh 探测依赖，但插件 Makefile 未声明
           REQUIRED_PACKAGES="
-          luci-app-mt5700m
-          mt5700m-transport
-          flock
-          curl
+          qmodem
+          luci-app-qmodem-next
+          luci-i18n-qmodem-next-zh-cn
+          modem_scan
+          ubus-at-daemon
+          kmod-usb-net-cdc-ether
+          kmod-usb-net-cdc-ncm
           "
-
 
           REQUIRED_ERROR=0
 
-
           for PKG in $REQUIRED_PACKAGES; do
 
-            if ! grep -q \
-              "^CONFIG_PACKAGE_${PKG}=y$" \
-              .config; then
-
+            if ! grep -q "^CONFIG_PACKAGE_${PKG}=y$" .config; then
 
               echo "::error::H5000M 必需组件没有编入固件：$PKG"
 
@@ -650,11 +622,10 @@ jobs:
 
           done
 
-
           if [ "$REQUIRED_ERROR" -ne 0 ]; then
 
             echo
-            echo "::error::MT5700M 必需组件检查失败。"
+            echo "::error::QModem 必需组件检查失败。"
             echo
 
             exit 1
@@ -663,72 +634,36 @@ jobs:
 
 
           # ----------------------------------------------------
-          # 完整 QModem 禁止进入编译
+          # 禁止进入编译的组件
           #
-          # y：编入固件
-          # m：作为软件包编译
-          #
-          # 本项目两种都不需要。
+          # luci-app-qmodem：旧版界面，与 luci-app-qmodem-next 互斥
+          # luci-app-mt5700m / mt5700m-transport：已弃用的旧管理器
           # ----------------------------------------------------
 
           FORBIDDEN_PACKAGES="
           luci-app-qmodem
-          luci-app-qmodem-next
-          luci-i18n-qmodem-next-zh-cn
-          qmodem
-          modem_scan
-          qmodem-settings
-          qmodem-smsd
-          sms-forwarder-next
-          tom_modem
-          qmodem-seal
+          luci-app-mt5700m
+          mt5700m-transport
           "
 
-
-          QMODEM_ERROR=0
-
+          FORBIDDEN_ERROR=0
 
           for PKG in $FORBIDDEN_PACKAGES; do
 
-            if grep -Eq \
-              "^CONFIG_PACKAGE_${PKG}=[ym]$" \
-              .config; then
+            if grep -Eq "^CONFIG_PACKAGE_${PKG}=[ym]$" .config; then
 
+              echo "::error::发现不应该被选择的组件：$(grep "^CONFIG_PACKAGE_${PKG}=" .config | tail -n 1)"
 
-              VALUE="$(
-                grep \
-                  "^CONFIG_PACKAGE_${PKG}=" \
-                  .config \
-                  | tail -n 1
-              )"
-
-
-              echo "::error::发现不应该被选择的 QModem 组件：$VALUE"
-
-              QMODEM_ERROR=1
+              FORBIDDEN_ERROR=1
 
             fi
 
           done
 
+          if [ "$FORBIDDEN_ERROR" -ne 0 ]; then
 
-          if [ "$QMODEM_ERROR" -ne 0 ]; then
-
             echo
-            echo "=================================================="
-            echo "::error::完整 QModem 被依赖关系自动选中！"
-            echo
-            echo "H5000M 的设计是："
-            echo
-            echo "  luci-app-mt5700m      = 编译"
-            echo "  mt5700m-transport     = 编译"
-            echo
-            echo "  qmodem                = 禁止"
-            echo "  modem_scan            = 禁止"
-            echo "  luci-app-qmodem-next  = 禁止"
-            echo
-            echo "停止编译，避免重新生成 USB / USBv6。"
-            echo "=================================================="
+            echo "::error::存在与 QModem 冲突的组件，停止编译。"
             echo
 
             exit 1
@@ -740,13 +675,11 @@ jobs:
           echo "=================================================="
           echo "[OK] H5000M 5G 配置检查通过"
           echo
-          echo "luci-app-mt5700m      = YES"
-          echo "mt5700m-transport     = YES"
-          echo "flock / curl          = YES"
+          echo "qmodem                = YES"
+          echo "luci-app-qmodem-next  = YES"
           echo
-          echo "qmodem                = NO"
-          echo "modem_scan            = NO"
-          echo "luci-app-qmodem-next  = NO"
+          echo "luci-app-qmodem       = NO"
+          echo "luci-app-mt5700m      = NO"
           echo "=================================================="
           echo
 
@@ -902,20 +835,18 @@ jobs:
             fi
 
 
-            echo "MT5700M 必需组件："
+            echo "QModem 必需组件："
             echo
 
-
             for PKG in \
-              luci-app-mt5700m \
-              mt5700m-transport \
-              flock \
-              curl; do
+              qmodem \
+              luci-app-qmodem-next \
+              modem_scan \
+              ubus-at-daemon \
+              kmod-usb-net-cdc-ether \
+              kmod-usb-net-cdc-ncm; do
 
-
-              if grep -qh \
-                "^${PKG} - " \
-                $MANIFEST_FILES; then
+              if grep -qh "^${PKG} - " $MANIFEST_FILES; then
 
                 echo "[OK] $PKG"
 
@@ -931,46 +862,30 @@ jobs:
 
 
             echo
-            echo "检查禁止进入固件的完整 QModem："
+            echo "检查禁止进入固件的组件："
             echo
 
-
-            MANIFEST_QMODEM_ERROR=0
-
+            MANIFEST_FORBIDDEN_ERROR=0
 
             for PKG in \
               luci-app-qmodem \
-              luci-app-qmodem-next \
-              luci-i18n-qmodem-next-zh-cn \
-              qmodem \
-              modem_scan \
-              qmodem-settings \
-              qmodem-smsd \
-              sms-forwarder-next \
-              tom_modem \
-              qmodem-seal; do
+              luci-app-mt5700m \
+              mt5700m-transport; do
 
-
-              if grep -qh \
-                "^${PKG} - " \
-                $MANIFEST_FILES; then
+              if grep -qh "^${PKG} - " $MANIFEST_FILES; then
 
                 echo "::error::最终固件中发现禁止组件：$PKG"
 
-                MANIFEST_QMODEM_ERROR=1
+                MANIFEST_FORBIDDEN_ERROR=1
 
               fi
 
             done
 
-
-            if [ "$MANIFEST_QMODEM_ERROR" -ne 0 ]; then
+            if [ "$MANIFEST_FORBIDDEN_ERROR" -ne 0 ]; then
 
               echo
-              echo "=================================================="
-              echo "::error::完整 QModem 已进入最终固件！"
-              echo "::error::停止打包和创建 Release。"
-              echo "=================================================="
+              echo "::error::最终固件存在冲突组件，停止打包和创建 Release。"
               echo
 
               exit 1
@@ -979,8 +894,7 @@ jobs:
 
 
             echo
-            echo "[OK] 最终固件中没有完整 QModem"
-            echo "[OK] 不会由 QModem 创建 USB / USBv6"
+            echo "[OK] 最终固件只有 QModem 一套 5G 管理器"
             echo
             echo "=================================================="
             echo
