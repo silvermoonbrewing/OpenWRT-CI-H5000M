@@ -235,76 +235,19 @@ if [ -f "$RUST_FILE" ]; then
 	fi
 fi
 
-#---------- 修正 MT5700M 页面大标题在 Argon 主题下不显示 ----------
-# 插件的蓝色卡片大标题是 <h2>，只设置了白色文字、没有设置背景；
-# Argon 主题给所有 h2 加白色背景块，结果白字白底看不见。
-# 给两处标题样式补上"无背景/无阴影/无边框/无内边距"：
-#   status.js    .mt5700m-title   → 概览页
-#   controls.js  .mt-ui-hero h2   → 移动数据/无线与小区/短信/模组与SIM卡/高级/AT终端
-MT5700M_JS="$PKG_PATH/../feeds/mt5700m/luci-app-mt5700m/htdocs/luci-static/resources"
-MT5700M_NOBG='background:none!important;box-shadow:none!important;border:0!important;padding:0!important;'
-for MT5700M_FIX in \
-	"view/mt5700m/status.js|.mt5700m-title{" \
-	"mt5700m/controls.js|.mt-ui-hero h2{"; do
-	MT5700M_FILE="$MT5700M_JS/${MT5700M_FIX%%|*}"
-	MT5700M_SEL="${MT5700M_FIX#*|}"
-	[ -f "$MT5700M_FILE" ] || continue
+#---------- 修正 QModem 版本号（防御性）----------
+# apk 不接受 "3.4.0-rc.3" 这种预发布格式（连字符+点号），
+# qmodem 各包共用 version.mk 里的 QMODEM_VERSION，统一改成 _rcN 形式。
+# 上游目前已是 3.4.0_rc3，此段只在上游改回旧格式时生效。
+QMODEM_VER_MK="$PKG_PATH/../feeds/qmodem/version.mk"
+if [ -f "$QMODEM_VER_MK" ]; then
 	echo " "
-	if grep -qF "${MT5700M_SEL}background:none" "$MT5700M_FILE"; then
-		echo "mt5700m title css already fixed: ${MT5700M_FIX%%|*}"
-	elif grep -qF "${MT5700M_SEL}margin:0 0 6px;" "$MT5700M_FILE"; then
-		MT5700M_SEL_RE="$(printf '%s' "$MT5700M_SEL" | sed 's/[.[\*^$/]/\\&/g')"
-		sed -i "s/${MT5700M_SEL_RE}margin:0 0 6px;/${MT5700M_SEL_RE}${MT5700M_NOBG}margin:0 0 6px;/" "$MT5700M_FILE"
-		echo "mt5700m title css has been fixed: ${MT5700M_FIX%%|*}"
+	OLD_VER=$(grep -oP '^QMODEM_VERSION:=\K.*' "$QMODEM_VER_MK" || true)
+	NEW_VER=$(echo "$OLD_VER" | sed -E 's/-rc\.?([0-9]+)/_rc\1/; s/-beta\.?([0-9]+)/_beta\1/; s/-alpha\.?([0-9]+)/_alpha\1/')
+	if [ -n "$OLD_VER" ] && [ "$OLD_VER" != "$NEW_VER" ]; then
+		sed -i "s|^QMODEM_VERSION:=.*|QMODEM_VERSION:=$NEW_VER|" "$QMODEM_VER_MK"
+		echo "qmodem version has been fixed: $OLD_VER -> $NEW_VER"
 	else
-		echo "mt5700m title css fix skipped (upstream changed): ${MT5700M_FIX%%|*}"
+		echo "qmodem version is fine: $OLD_VER"
 	fi
-done
-
-#---------- 修正 MT5700M 健康检查探测方式 ----------
-# 原版 health_probe 用 curl --interface eth2 访问百度/QQ 验证互联网。
-# OpenClash 开启"路由本机代理"(TUN) 时，本机 TCP 会被打 fwmark 送进 utun，
-# 而 curl 绑定了 eth2（SO_BINDTODEVICE），回包从 utun 回来被内核丢弃 → 超时 000，
-# 插件误判断网，每小时自动重建 3 次数据会话（每次断网数秒、换 IP）。
-#
-# OpenClash 为避免内核自身流量回环，在本机代理链最前面放行 GID 65534：
-#   openclash_output / openclash_mangle_output:  skgid == 65534 return
-# 其内核即以 root:nogroup(65534) 运行。这里让探测 curl 同样以 root:nogroup 运行，
-# 从而绕过 OpenClash，真正从 eth2 出去，保留原作者的 HTTPS 实际互联网验证。
-# 用 start-stop-daemon 切换组；-p 指定独立 pidfile，避免与其他 curl 进程互相判定"已在运行"。
-MT5700M_HEALTH="$PKG_PATH/../feeds/mt5700m/luci-app-mt5700m/root/usr/share/mt5700m/health.sh"
-if [ -f "$MT5700M_HEALTH" ] && grep -q '^health_probe() {$' "$MT5700M_HEALTH"; then
-	echo " "
-
-	MT5700M_PROBE_NEW="$(mktemp)"
-	cat > "$MT5700M_PROBE_NEW" <<-'PROBE'
-	health_curl() {
-	    local bin
-	    bin="$(command -v curl)" || return 127
-	    # 以 root:nogroup(GID 65534) 运行，命中 OpenClash 的 skgid 65534 放行规则
-	    if command -v start-stop-daemon >/dev/null 2>&1 && grep -q '^nogroup:' /etc/group 2>/dev/null; then
-	        start-stop-daemon -S -c root:nogroup -p "${STATE_DIR:-/var/run/mt5700m}/probe-curl.pid" -x "$bin" -- "$@"
-	    else
-	        "$bin" "$@"
-	    fi
-	}
-	health_probe() {
-	    local target code
-	    command -v curl >/dev/null 2>&1 || return 2
-	    for target in https://www.baidu.com https://www.qq.com; do
-	        code="$(health_curl --interface "$1" --connect-timeout 2 --max-time 2 -s -o /dev/null -w '%{http_code}' "$target" 2>/dev/null)" || continue
-	        case "$code" in [1-5][0-9][0-9]) return 0;; esac
-	    done
-	    return 1
-	}
-	PROBE
-
-	# 删除原 health_probe（从函数头到第一个行首 "}"），在原位置插入新函数
-	if sed -i -e "/^health_probe() {\$/{r $MT5700M_PROBE_NEW" -e ':a;N;/\n}$/!ba;d}' "$MT5700M_HEALTH" \
-		&& grep -q 'root:nogroup' "$MT5700M_HEALTH" && sh -n "$MT5700M_HEALTH"; then
-		echo "mt5700m health probe has been fixed!"
-	else
-		echo "mt5700m health probe fix failed; continuing!"
-	fi
-	rm -f "$MT5700M_PROBE_NEW"
 fi
