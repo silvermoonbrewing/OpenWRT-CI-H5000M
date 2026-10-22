@@ -54,8 +54,8 @@ set_iface() {
 	esac
 
 	uci -q set wireless.$iface.ssid="$ssid"
-	# WPA2-PSK，算法自动（LuCI 显示"自动"）
-	uci -q set wireless.$iface.encryption='psk2'
+	# WPA2-PSK (CCMP)，即 LuCI 中"强制 CCMP (AES)"
+	uci -q set wireless.$iface.encryption='psk2+ccmp'
 	uci -q set wireless.$iface.key="$WIFI_KEY"
 	uci -q delete wireless.$iface.disabled
 }
@@ -65,10 +65,8 @@ config_foreach set_radio wifi-device
 config_foreach set_iface wifi-iface
 uci -q commit wireless
 
-#---------- MT5700M 数据面健康检查 ----------
-# 已改用 luci-app-mt5700m 3.x 自带的 health.sh（manager monitor 每 60s 探测），
-# 不再使用自建 mt5700m-watchdog，避免两套恢复逻辑同时动链路。
-# 注意：health.sh 依赖 curl，但插件 Makefile 未声明，
-#       Config/H5000M.txt 中 CONFIG_PACKAGE_curl=y 必须保留。
+#---------- 5G 模组 ----------
+# 由 QModem 管理（板级预设 hiveton,h5000m：slot 2-1，接口 USB / USBv6），
+# 首次启动无需在这里配置。
 
 exit 0
