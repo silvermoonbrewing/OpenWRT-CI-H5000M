@@ -195,14 +195,14 @@ CONFIG_ZSTD_OPTIMIZE_O3=y
 CONFIG_PACKAGE_luci-theme-bootstrap=y
 
 #==============================================================
-# H5000M 5G 模组管理
+# H5000M 5G 模组管理：QModem（FUjr/QModem）
 #
-# H5000M 使用专用 luci-app-mt5700m（3.x）。
-#
-# 3.x 自带 mt5700m-transport 负责串口 / TCP AT / 短信，
-# 已不再依赖 QModem、ubus-at-daemon、sms-tool_q，
-# WRT-CORE.yml 也不再引入 QModem feed。
+# 鼎桥 MT5700M（USB ID 3466:3301，ECM/NCM 拨号）在 QModem 支持列表内；
+# QModem 自带 hiveton,h5000m 板级预设，开机自动识别 slot 2-1 的模组。
+# 界面用新版 luci-app-qmodem-next（旧版 luci-app-qmodem 与之互斥）。
+# 已弃用 luci-app-mt5700m，避免两套管理器抢同一个模组。
 #==============================================================
 
-CONFIG_PACKAGE_luci-app-mt5700m=y
-CONFIG_PACKAGE_luci-i18n-mt5700m-zh-cn=y
+CONFIG_PACKAGE_qmodem=y
+CONFIG_PACKAGE_luci-app-qmodem-next=y
+CONFIG_PACKAGE_luci-i18n-qmodem-next-zh-cn=y
