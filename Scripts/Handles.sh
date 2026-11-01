@@ -251,3 +251,20 @@ if [ -f "$QMODEM_VER_MK" ]; then
 		echo "qmodem version is fine: $OLD_VER"
 	fi
 fi
+
+#---------- 修正 QModem 自带 ndisc6 的源码下载地址 ----------
+# QModem feed 的 application/ndisc6 固定 1.0.2，源码地址是
+# http://www.remlab.net/files/ndisc6；上游已把旧版本挪到 archive/ 子目录，
+# 原地址返回 410 Gone，OpenWrt/ImmortalWrt 镜像也没有这个文件，
+# 导致 ndisc6 下载失败、整个编译中断。改指向 archive/（MD5 已核对一致）。
+NDISC6_MK="$PKG_PATH/../feeds/qmodem/application/ndisc6/Makefile"
+if [ -f "$NDISC6_MK" ]; then
+	echo " "
+
+	if grep -qE '^PKG_SOURCE_URL:=https?://www\.remlab\.net/files/ndisc6/?$' "$NDISC6_MK"; then
+		sed -i -E 's#^PKG_SOURCE_URL:=.*#PKG_SOURCE_URL:=https://www.remlab.net/files/ndisc6/archive#' "$NDISC6_MK"
+		echo "ndisc6 source url has been fixed!"
+	else
+		echo "ndisc6 source url is fine: $(grep -m1 '^PKG_SOURCE_URL' "$NDISC6_MK")"
+	fi
+fi
