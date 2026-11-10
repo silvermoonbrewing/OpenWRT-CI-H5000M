@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 
 # ============================================================
-# MT3600BE 固件自动清理
+# H5000M 固件自动清理
 # ============================================================
 
 name: Auto-Clean
@@ -41,7 +41,7 @@ jobs:
           DELETE_FAILED=0
 
           echo "=================================================="
-          echo "        MT3600BE Release 自动清理"
+          echo "        H5000M Release 自动清理"
           echo "=================================================="
           echo
           echo "清理规则："
@@ -75,7 +75,7 @@ jobs:
             echo "[KEEP] 无需清理"
 
             {
-              echo "### MT3600BE Release 自动清理"
+              echo "### H5000M Release 自动清理"
               echo
               echo "当前没有任何 Release，无需清理。"
             } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
@@ -104,7 +104,7 @@ jobs:
             echo "[KEEP] 本次不删除任何 Release"
 
             {
-              echo "### MT3600BE Release 自动清理"
+              echo "### H5000M Release 自动清理"
               echo
               echo "| 项目 | 数量 |"
               echo "| --- | ---: |"
@@ -176,7 +176,7 @@ jobs:
           echo "=================================================="
 
           {
-            echo "### MT3600BE Release 自动清理"
+            echo "### H5000M Release 自动清理"
             echo
             echo "| 项目 | 数量 |"
             echo "| --- | ---: |"
