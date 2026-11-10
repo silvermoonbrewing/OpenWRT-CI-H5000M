@@ -171,6 +171,31 @@ jobs:
             "$GITHUB_WORKSPACE/wrt"
 
 
+          # ------------------------------------------------
+          # 加 swap，防止编译时内存吃满
+          #
+          # 托管机只有 4 线程 / 16G 内存、默认无足够 swap；
+          # rust（shadowsocks-rust 开 LTO）与 go 包并行编译时
+          # 内存可能被吃光、Runner 进程被饿死（最可能的原因），表现为
+          # "The hosted runner lost communication with the server"
+          # （#105、#106 均死在 Compile Firmware）。
+          # ------------------------------------------------
+          SWAP_KB=$(awk '/^SwapTotal:/ {print $2}' /proc/meminfo)
+
+          if [ "${SWAP_KB:-0}" -lt 7000000 ]; then
+
+            sudo swapoff -a || true
+            sudo rm -f /mnt/swapfile
+            sudo fallocate -l 8G /mnt/swapfile
+            sudo chmod 600 /mnt/swapfile
+            sudo mkswap /mnt/swapfile
+            sudo swapon /mnt/swapfile
+
+          fi
+
+          free -h
+
+
       # ========================================================
       # 初始化变量
       # ========================================================
@@ -719,9 +744,14 @@ jobs:
           cd ./wrt/
 
 
-          make -j"$(nproc)" \
-            || make -j"$(nproc)" V=s \
-            || make -j1 V=s
+          free -h
+          df -h /mnt
+
+
+          # nice 19：编译让出 CPU，保证 Runner 自身进程不被饿死
+          nice -n 19 make -j"$(nproc)" \
+            || nice -n 19 make -j"$(nproc)" V=s \
+            || nice -n 19 make -j1 V=s
 
 
       # ========================================================
